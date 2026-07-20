@@ -2,14 +2,7 @@
   'use strict';
 
   const STORAGE_KEY = 'dayflow-planner-v1';
-
-  const SECTIONS = [
-    'overview',
-    'checklist',
-    'schedule',
-    'diet',
-    'workout'
-  ];
+  const SECTIONS = ['overview', 'checklist', 'schedule', 'diet', 'workout'];
 
   const SECTION_TITLES = {
     overview: 'Overview',
@@ -41,6 +34,10 @@
   let activeTaskFilter = 'all';
   let saveTimer = null;
   let openCustomSelect = null;
+  let editingScheduleId = null;
+  let dialogResolver = null;
+  let dialogCancelAllowed = false;
+  let dialogPreviousFocus = null;
 
   const customSelects = new Map();
 
@@ -85,6 +82,14 @@
     endTime: $('#endTime'),
     scheduleActivity: $('#scheduleActivity'),
     scheduleMessage: $('#scheduleMessage'),
+
+    copyScheduleForm: $('#copyScheduleForm'),
+    copyScheduleSourceDate: $('#copyScheduleSourceDate'),
+    copyScheduleTargetDate: $('#copyScheduleTargetDate'),
+    copyScheduleReplace: $('#copyScheduleReplace'),
+    copyYesterdayButton: $('#copyYesterdayButton'),
+    copyScheduleMessage: $('#copyScheduleMessage'),
+
     scheduleFilterDate: $('#scheduleFilterDate'),
     scheduleDayTitle: $('#scheduleDayTitle'),
     scheduleList: $('#scheduleList'),
@@ -111,6 +116,15 @@
     workoutDuration: $('#workoutDuration'),
     workoutNotes: $('#workoutNotes'),
     workoutWeek: $('#workoutWeek'),
+
+    toastRegion: $('#toastRegion'),
+    appDialogBackdrop: $('#appDialog'),
+    appDialogPanel: $('#appDialog .app-dialog'),
+    appDialogIcon: $('#appDialogIcon'),
+    appDialogTitle: $('#appDialogTitle'),
+    appDialogMessage: $('#appDialogMessage'),
+    appDialogCancel: $('#appDialogCancel'),
+    appDialogConfirm: $('#appDialogConfirm'),
 
     resetAllButton: $('#resetAllButton'),
     emptyStateTemplate: $('#emptyStateTemplate')
@@ -143,27 +157,19 @@
     }
 
     next.tasks = Array.isArray(value.tasks)
-      ? value.tasks
-          .map(normalizeTask)
-          .filter(Boolean)
+      ? value.tasks.map(normalizeTask).filter(Boolean)
       : [];
 
     next.schedule = Array.isArray(value.schedule)
-      ? value.schedule
-          .map(normalizeScheduleItem)
-          .filter(Boolean)
+      ? value.schedule.map(normalizeScheduleItem).filter(Boolean)
       : [];
 
     next.meals = Array.isArray(value.meals)
-      ? value.meals
-          .map(normalizeMeal)
-          .filter(Boolean)
+      ? value.meals.map(normalizeMeal).filter(Boolean)
       : [];
 
     next.workouts = Array.isArray(value.workouts)
-      ? value.workouts
-          .map(normalizeWorkout)
-          .filter(Boolean)
+      ? value.workouts.map(normalizeWorkout).filter(Boolean)
       : [];
 
     return next;
@@ -180,21 +186,14 @@
 
     return {
       id: safeId(item.id),
-
-      text: item.text
-        .trim()
-        .slice(0, 140),
+      text: item.text.trim().slice(0, 140),
 
       category:
         typeof item.category === 'string'
           ? item.category.slice(0, 40)
           : 'Personal',
 
-      priority: [
-        'low',
-        'normal',
-        'high'
-      ].includes(item.priority)
+      priority: ['low', 'normal', 'high'].includes(item.priority)
         ? item.priority
         : 'normal',
 
@@ -226,16 +225,10 @@
 
     return {
       id: safeId(item.id),
-
       date: item.date,
-
       start: item.start,
-
       end: item.end,
-
-      activity: item.activity
-        .trim()
-        .slice(0, 160),
+      activity: item.activity.trim().slice(0, 160),
 
       createdAt: validDateTime(item.createdAt)
         ? item.createdAt
@@ -255,7 +248,6 @@
 
     return {
       id: safeId(item.id),
-
       date: item.date,
 
       type:
@@ -263,33 +255,11 @@
           ? item.type.slice(0, 30)
           : 'Meal',
 
-      food: item.food
-        .trim()
-        .slice(0, 160),
-
-      calories: clampNumber(
-        item.calories,
-        0,
-        10000
-      ),
-
-      protein: clampNumber(
-        item.protein,
-        0,
-        1000
-      ),
-
-      carbs: clampNumber(
-        item.carbs,
-        0,
-        1000
-      ),
-
-      fat: clampNumber(
-        item.fat,
-        0,
-        1000
-      ),
+      food: item.food.trim().slice(0, 160),
+      calories: clampNumber(item.calories, 0, 10000),
+      protein: clampNumber(item.protein, 0, 1000),
+      carbs: clampNumber(item.carbs, 0, 1000),
+      fat: clampNumber(item.fat, 0, 1000),
 
       createdAt: validDateTime(item.createdAt)
         ? item.createdAt
@@ -314,24 +284,13 @@
 
     return {
       id: safeId(item.id),
-
       day: item.day,
-
-      title: item.title
-        .trim()
-        .slice(0, 120),
-
-      duration: clampNumber(
-        item.duration,
-        0,
-        600
-      ),
+      title: item.title.trim().slice(0, 120),
+      duration: clampNumber(item.duration, 0, 600),
 
       notes:
         typeof item.notes === 'string'
-          ? item.notes
-              .trim()
-              .slice(0, 1000)
+          ? item.notes.trim().slice(0, 1000)
           : '',
 
       createdAt: validDateTime(item.createdAt)
@@ -391,9 +350,7 @@
   function validDateTime(value) {
     return (
       typeof value === 'string' &&
-      !Number.isNaN(
-        new Date(value).getTime()
-      )
+      !Number.isNaN(new Date(value).getTime())
     );
   }
 
@@ -412,7 +369,6 @@
 
   function saveState() {
     setSaveStatus('saving');
-
     window.clearTimeout(saveTimer);
 
     saveTimer = window.setTimeout(() => {
@@ -456,12 +412,9 @@
     const dot = document.createElement('span');
 
     dot.className = 'status-dot';
-    dot.setAttribute(
-      'aria-hidden',
-      'true'
-    );
+    dot.setAttribute('aria-hidden', 'true');
 
-    const message =
+    const text =
       status === 'saving'
         ? 'Saving…'
         : status === 'error'
@@ -470,7 +423,7 @@
 
     els.saveStatus.append(
       dot,
-      document.createTextNode(message)
+      document.createTextNode(text)
     );
   }
 
@@ -481,7 +434,6 @@
 
   function todayKey() {
     const date = new Date();
-
     const year = date.getFullYear();
 
     const month = String(
@@ -497,6 +449,34 @@
 
   function dateFromKey(key) {
     return new Date(`${key}T12:00:00`);
+  }
+
+  function dateKeyFromDate(date) {
+    const year = date.getFullYear();
+
+    const month = String(
+      date.getMonth() + 1
+    ).padStart(2, '0');
+
+    const day = String(
+      date.getDate()
+    ).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+  }
+
+  function shiftDateKey(key, amount) {
+    if (
+      !validDate(key) ||
+      !Number.isInteger(amount)
+    ) {
+      return '';
+    }
+
+    const date = dateFromKey(key);
+    date.setDate(date.getDate() + amount);
+
+    return dateKeyFromDate(date);
   }
 
   function formatLongDate(key) {
@@ -586,9 +566,7 @@
       'Add your first item using the form above.'
   ) {
     const fragment =
-      els.emptyStateTemplate.content.cloneNode(
-        true
-      );
+      els.emptyStateTemplate.content.cloneNode(true);
 
     const paragraph =
       fragment.querySelector('p');
@@ -600,10 +578,7 @@
     return fragment;
   }
 
-  function makeDeleteButton(
-    label,
-    onClick
-  ) {
+  function makeDeleteButton(label, onClick) {
     const button =
       document.createElement('button');
 
@@ -624,6 +599,485 @@
     );
 
     return button;
+  }
+
+  function makeEditButton(label, onClick) {
+    const button =
+      document.createElement('button');
+
+    button.className = 'edit-button';
+    button.type = 'button';
+
+    button.setAttribute(
+      'aria-label',
+      label
+    );
+
+    button.title = label;
+    button.textContent = '✎';
+
+    button.addEventListener(
+      'click',
+      onClick
+    );
+
+    return button;
+  }
+
+  function removeToast(toast) {
+    if (
+      !toast ||
+      !toast.isConnected
+    ) {
+      return;
+    }
+
+    toast.classList.add('leaving');
+
+    window.setTimeout(() => {
+      toast.remove();
+    }, 190);
+  }
+
+  function showToast(message, options = {}) {
+    const {
+      type = 'info',
+
+      title =
+        type === 'error'
+          ? 'Check that again'
+          : type === 'success'
+            ? 'Done'
+            : 'DayFlow',
+
+      duration =
+        type === 'error'
+          ? 5200
+          : 3600
+    } = options;
+
+    if (!els.toastRegion) {
+      return;
+    }
+
+    const toast =
+      document.createElement('article');
+
+    toast.className =
+      `app-toast ${type}`;
+
+    toast.setAttribute(
+      'role',
+      type === 'error'
+        ? 'alert'
+        : 'status'
+    );
+
+    const icon =
+      document.createElement('span');
+
+    icon.className =
+      'app-toast-icon';
+
+    icon.setAttribute(
+      'aria-hidden',
+      'true'
+    );
+
+    icon.textContent =
+      type === 'error'
+        ? '!'
+        : type === 'success'
+          ? '✓'
+          : 'i';
+
+    const copy =
+      document.createElement('div');
+
+    copy.className =
+      'app-toast-copy';
+
+    const heading =
+      document.createElement('strong');
+
+    heading.textContent = title;
+
+    const body =
+      document.createElement('span');
+
+    body.textContent = message;
+
+    copy.append(
+      heading,
+      body
+    );
+
+    const close =
+      document.createElement('button');
+
+    close.className =
+      'app-toast-close';
+
+    close.type = 'button';
+
+    close.setAttribute(
+      'aria-label',
+      'Close message'
+    );
+
+    close.textContent = '×';
+
+    close.addEventListener(
+      'click',
+      () => removeToast(toast)
+    );
+
+    toast.append(
+      icon,
+      copy,
+      close
+    );
+
+    els.toastRegion.append(toast);
+
+    window.requestAnimationFrame(() => {
+      toast.classList.add('visible');
+    });
+
+    if (duration > 0) {
+      window.setTimeout(() => {
+        removeToast(toast);
+      }, duration);
+    }
+  }
+
+  function closeAppDialog(result) {
+    if (!dialogResolver) {
+      return;
+    }
+
+    const resolve = dialogResolver;
+
+    dialogResolver = null;
+    dialogCancelAllowed = false;
+
+    els.appDialogBackdrop.hidden = true;
+
+    document.body.classList.remove(
+      'dialog-open'
+    );
+
+    resolve(result);
+
+    if (
+      dialogPreviousFocus instanceof HTMLElement
+    ) {
+      dialogPreviousFocus.focus({
+        preventScroll: true
+      });
+    }
+
+    dialogPreviousFocus = null;
+  }
+
+  function showDialog(options = {}) {
+    const {
+      title = 'DayFlow',
+      message = '',
+      type = 'info',
+      confirmText = 'OK',
+      cancelText = 'Cancel',
+      showCancel = false
+    } = options;
+
+    if (dialogResolver) {
+      closeAppDialog(false);
+    }
+
+    dialogPreviousFocus =
+      document.activeElement;
+
+    dialogCancelAllowed =
+      showCancel;
+
+    els.appDialogPanel.className =
+      `app-dialog ${type}`;
+
+    els.appDialogIcon.textContent =
+      type === 'error' ||
+      type === 'danger'
+        ? '!'
+        : type === 'success'
+          ? '✓'
+          : '?';
+
+    els.appDialogTitle.textContent =
+      title;
+
+    els.appDialogMessage.textContent =
+      message;
+
+    els.appDialogConfirm.textContent =
+      confirmText;
+
+    els.appDialogCancel.textContent =
+      cancelText;
+
+    els.appDialogCancel.hidden =
+      !showCancel;
+
+    els.appDialogBackdrop.hidden =
+      false;
+
+    document.body.classList.add(
+      'dialog-open'
+    );
+
+    window.requestAnimationFrame(() => {
+      const button = showCancel
+        ? els.appDialogCancel
+        : els.appDialogConfirm;
+
+      button.focus();
+    });
+
+    return new Promise((resolve) => {
+      dialogResolver = resolve;
+    });
+  }
+
+  function initializeFeedbackUi() {
+    let invalidFeedbackLocked = false;
+
+    els.appDialogConfirm.addEventListener(
+      'click',
+      () => closeAppDialog(true)
+    );
+
+    els.appDialogCancel.addEventListener(
+      'click',
+      () => closeAppDialog(false)
+    );
+
+    document.addEventListener(
+      'invalid',
+      (event) => {
+        event.preventDefault();
+
+        const field = event.target;
+
+        if (
+          !(field instanceof HTMLInputElement) &&
+          !(field instanceof HTMLTextAreaElement) &&
+          !(field instanceof HTMLSelectElement)
+        ) {
+          return;
+        }
+
+        field.classList.add(
+          'is-invalid'
+        );
+
+        if (invalidFeedbackLocked) {
+          return;
+        }
+
+        invalidFeedbackLocked = true;
+
+        field.focus();
+
+        showToast(
+          constraintValidationMessage(field),
+          {
+            type: 'error',
+            title: 'Please fix this field'
+          }
+        );
+
+        window.setTimeout(() => {
+          invalidFeedbackLocked = false;
+        }, 120);
+      },
+      true
+    );
+
+    document.addEventListener(
+      'input',
+      (event) => {
+        event.target?.classList?.remove(
+          'is-invalid'
+        );
+      }
+    );
+
+    document.addEventListener(
+      'change',
+      (event) => {
+        event.target?.classList?.remove(
+          'is-invalid'
+        );
+      }
+    );
+
+    els.appDialogBackdrop.addEventListener(
+      'pointerdown',
+      (event) => {
+        if (
+          event.target === els.appDialogBackdrop &&
+          dialogCancelAllowed
+        ) {
+          closeAppDialog(false);
+        }
+      }
+    );
+
+    document.addEventListener(
+      'keydown',
+      (event) => {
+        if (!dialogResolver) {
+          return;
+        }
+
+        if (
+          event.key === 'Escape' &&
+          dialogCancelAllowed
+        ) {
+          event.preventDefault();
+          closeAppDialog(false);
+          return;
+        }
+
+        if (event.key === 'Tab') {
+          const focusable = [
+            els.appDialogCancel,
+            els.appDialogConfirm
+          ].filter((button) => {
+            return (
+              !button.hidden &&
+              !button.disabled
+            );
+          });
+
+          if (!focusable.length) {
+            return;
+          }
+
+          const first = focusable[0];
+
+          const last =
+            focusable[focusable.length - 1];
+
+          if (
+            event.shiftKey &&
+            document.activeElement === first
+          ) {
+            event.preventDefault();
+            last.focus();
+          } else if (
+            !event.shiftKey &&
+            document.activeElement === last
+          ) {
+            event.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    );
+  }
+
+  function clearInvalidState(...fields) {
+    fields.forEach((field) => {
+      field?.classList.remove(
+        'is-invalid'
+      );
+    });
+  }
+
+  function validateScheduleValues({
+    date,
+    start,
+    end,
+    activity
+  }) {
+    if (!validDate(date)) {
+      return {
+        message:
+          'Choose a valid date for this time block.',
+        field: 'date'
+      };
+    }
+
+    if (!validTime(start)) {
+      return {
+        message:
+          'Choose a valid start time.',
+        field: 'start'
+      };
+    }
+
+    if (!validTime(end)) {
+      return {
+        message:
+          'Choose a valid finish time.',
+        field: 'end'
+      };
+    }
+
+    if (start >= end) {
+      return {
+        message:
+          'The finish time must be later than the start time.',
+        field: 'end'
+      };
+    }
+
+    if (!activity.trim()) {
+      return {
+        message:
+          'Enter a name for this activity.',
+        field: 'activity'
+      };
+    }
+
+    return null;
+  }
+
+  function constraintValidationMessage(field) {
+    const label =
+      field.labels?.[0]?.textContent.trim() ||
+      field.getAttribute('aria-label') ||
+      field.placeholder ||
+      'this field';
+
+    if (field.validity.valueMissing) {
+      return field.matches(
+        'select, input[type="date"], input[type="time"]'
+      )
+        ? `Choose ${label.toLowerCase()}.`
+        : `Enter ${label.toLowerCase()}.`;
+    }
+
+    if (field.validity.rangeUnderflow) {
+      return `${label} is below the minimum allowed value.`;
+    }
+
+    if (field.validity.rangeOverflow) {
+      return `${label} is above the maximum allowed value.`;
+    }
+
+    if (field.validity.stepMismatch) {
+      return `Enter a valid value for ${label.toLowerCase()}.`;
+    }
+
+    if (field.validity.typeMismatch) {
+      return `Enter a valid ${label.toLowerCase()}.`;
+    }
+
+    if (field.validity.tooLong) {
+      return `${label} is too long.`;
+    }
+
+    return `Check ${label.toLowerCase()} and try again.`;
   }
 
   function navigate(
@@ -670,7 +1124,9 @@
 
         button.setAttribute(
           'aria-current',
-          active ? 'page' : 'false'
+          active
+            ? 'page'
+            : 'false'
         );
       }
     );
@@ -709,7 +1165,8 @@
     const shell =
       document.createElement('div');
 
-    shell.className = 'select-shell';
+    shell.className =
+      'select-shell';
 
     select.parentNode.insertBefore(
       shell,
@@ -732,7 +1189,9 @@
     const trigger =
       document.createElement('button');
 
-    trigger.className = 'select-trigger';
+    trigger.className =
+      'select-trigger';
+
     trigger.type = 'button';
 
     trigger.setAttribute(
@@ -764,7 +1223,8 @@
     const value =
       document.createElement('span');
 
-    value.className = 'select-value';
+    value.className =
+      'select-value';
 
     const chevron =
       document.createElement('span');
@@ -785,7 +1245,8 @@
     const menu =
       document.createElement('div');
 
-    menu.className = 'select-menu';
+    menu.className =
+      'select-menu';
 
     menu.id =
       `${select.id || createId()}-menu`;
@@ -850,9 +1311,12 @@
                 option.value;
 
               select.dispatchEvent(
-                new Event('change', {
-                  bubbles: true
-                })
+                new Event(
+                  'change',
+                  {
+                    bubbles: true
+                  }
+                )
               );
 
               closeSelect(true);
@@ -868,15 +1332,13 @@
                 );
 
               if (
-                event.key ===
-                'ArrowDown'
+                event.key === 'ArrowDown'
               ) {
                 event.preventDefault();
 
                 focusOption(
                   Math.min(
-                    optionButtons.length -
-                      1,
+                    optionButtons.length - 1,
                     currentIndex + 1
                   )
                 );
@@ -1096,23 +1558,18 @@
     trigger.addEventListener(
       'keydown',
       (event) => {
-        const openKeys = [
-          'ArrowDown',
-          'ArrowUp',
-          'Enter',
-          ' '
-        ];
-
         if (
-          openKeys.includes(
-            event.key
-          )
+          [
+            'ArrowDown',
+            'ArrowUp',
+            'Enter',
+            ' '
+          ].includes(event.key)
         ) {
           event.preventDefault();
 
           const offset =
-            event.key ===
-            'ArrowUp'
+            event.key === 'ArrowUp'
               ? -1
               : 0;
 
@@ -1120,8 +1577,7 @@
             Math.max(
               0,
               Math.min(
-                optionButtons.length -
-                  1,
+                optionButtons.length - 1,
                 selectedIndex() +
                   offset
               )
@@ -1150,12 +1606,15 @@
     const observer =
       new MutationObserver(sync);
 
-    observer.observe(select, {
-      attributes: true,
-      attributeFilter: [
-        'disabled'
-      ]
-    });
+    observer.observe(
+      select,
+      {
+        attributes: true,
+        attributeFilter: [
+          'disabled'
+        ]
+      }
+    );
 
     const api = {
       shell,
@@ -1287,9 +1746,7 @@
         );
 
     els.scheduleCount.textContent =
-      String(
-        todaysSchedule.length
-      );
+      String(todaysSchedule.length);
 
     const todaysMeals =
       state.meals.filter(
@@ -1380,10 +1837,9 @@
 
           checkbox.addEventListener(
             'change',
-            () =>
-              toggleTask(
-                task.id
-              )
+            () => {
+              toggleTask(task.id);
+            }
           );
 
           const label =
@@ -1453,9 +1909,7 @@
             `${item.date}T${item.start}`;
 
           time.textContent =
-            formatTime(
-              item.start
-            );
+            formatTime(item.start);
 
           const activity =
             document.createElement(
@@ -1495,40 +1949,39 @@
   function renderTasks() {
     els.taskList.replaceChildren();
 
-    const tasks = [
-      ...state.tasks
-    ]
-      .filter((task) => {
-        if (
-          activeTaskFilter ===
-          'open'
-        ) {
-          return !task.done;
-        }
+    const tasks =
+      [...state.tasks]
+        .filter((task) => {
+          if (
+            activeTaskFilter ===
+            'open'
+          ) {
+            return !task.done;
+          }
 
-        if (
-          activeTaskFilter ===
-          'done'
-        ) {
-          return task.done;
-        }
+          if (
+            activeTaskFilter ===
+            'done'
+          ) {
+            return task.done;
+          }
 
-        return true;
-      })
-      .sort(
-        (a, b) =>
-          Number(a.done) -
-            Number(b.done) ||
-          priorityRank(
-            b.priority
-          ) -
+          return true;
+        })
+        .sort(
+          (a, b) =>
+            Number(a.done) -
+              Number(b.done) ||
             priorityRank(
-              a.priority
-            ) ||
-          b.createdAt.localeCompare(
-            a.createdAt
-          )
-      );
+              b.priority
+            ) -
+              priorityRank(
+                a.priority
+              ) ||
+            b.createdAt.localeCompare(
+              a.createdAt
+            )
+        );
 
     if (!tasks.length) {
       const message =
@@ -1581,8 +2034,9 @@
 
       checkbox.addEventListener(
         'change',
-        () =>
-          toggleTask(task.id)
+        () => {
+          toggleTask(task.id);
+        }
       );
 
       const main =
@@ -1651,10 +2105,9 @@
         main,
         makeDeleteButton(
           `Delete “${task.text}”`,
-          () =>
-            deleteTask(
-              task.id
-            )
+          () => {
+            deleteTask(task.id);
+          }
         )
       );
 
@@ -1662,9 +2115,7 @@
     });
   }
 
-  function priorityRank(
-    priority
-  ) {
+  function priorityRank(priority) {
     return {
       low: 0,
       normal: 1,
@@ -1674,9 +2125,7 @@
 
   function capitalize(value) {
     return (
-      value
-        .charAt(0)
-        .toUpperCase() +
+      value.charAt(0).toUpperCase() +
       value.slice(1)
     );
   }
@@ -1702,9 +2151,7 @@
       ),
 
       category,
-
       priority,
-
       done: false,
 
       createdAt:
@@ -1725,7 +2172,8 @@
       return;
     }
 
-    task.done = !task.done;
+    task.done =
+      !task.done;
 
     commit();
   }
@@ -1740,18 +2188,319 @@
     commit();
   }
 
+  function startScheduleEdit(
+    itemId,
+    preferredField = 'activity'
+  ) {
+    editingScheduleId =
+      itemId;
+
+    renderSchedule();
+
+    window.requestAnimationFrame(
+      () => {
+        const field =
+          els.scheduleList.querySelector(
+            `[data-edit-field="${preferredField}"]`
+          ) ||
+          els.scheduleList.querySelector(
+            '[data-edit-field]'
+          );
+
+        field?.focus();
+
+        if (
+          field instanceof HTMLInputElement &&
+          field.type === 'text'
+        ) {
+          field.select();
+        }
+      }
+    );
+  }
+
+  function cancelScheduleEdit() {
+    editingScheduleId = null;
+    renderSchedule();
+  }
+
+  function renderScheduleEditor(item) {
+    const row =
+      document.createElement('div');
+
+    row.className =
+      'schedule-item schedule-item-editing';
+
+    const form =
+      document.createElement('form');
+
+    form.className =
+      'schedule-edit-form';
+
+    form.noValidate = true;
+
+    const makeField = (
+      labelText,
+      input
+    ) => {
+      const wrapper =
+        document.createElement('div');
+
+      wrapper.className =
+        'schedule-edit-field';
+
+      const label =
+        document.createElement('label');
+
+      label.htmlFor = input.id;
+      label.textContent = labelText;
+
+      wrapper.append(
+        label,
+        input
+      );
+
+      return wrapper;
+    };
+
+    const startInput =
+      document.createElement('input');
+
+    startInput.id =
+      `schedule-edit-start-${item.id}`;
+
+    startInput.type = 'time';
+    startInput.value = item.start;
+    startInput.required = true;
+
+    startInput.dataset.editField =
+      'start';
+
+    const endInput =
+      document.createElement('input');
+
+    endInput.id =
+      `schedule-edit-end-${item.id}`;
+
+    endInput.type = 'time';
+    endInput.value = item.end;
+    endInput.required = true;
+
+    endInput.dataset.editField =
+      'end';
+
+    const activityInput =
+      document.createElement('input');
+
+    activityInput.id =
+      `schedule-edit-activity-${item.id}`;
+
+    activityInput.type = 'text';
+    activityInput.maxLength = 160;
+    activityInput.value = item.activity;
+    activityInput.required = true;
+
+    activityInput.dataset.editField =
+      'activity';
+
+    const activityField =
+      makeField(
+        'Activity',
+        activityInput
+      );
+
+    activityField.classList.add(
+      'activity-field'
+    );
+
+    const actions =
+      document.createElement('div');
+
+    actions.className =
+      'schedule-edit-actions';
+
+    const cancelButton =
+      document.createElement('button');
+
+    cancelButton.className =
+      'secondary-button';
+
+    cancelButton.type = 'button';
+    cancelButton.textContent = 'Cancel';
+
+    cancelButton.addEventListener(
+      'click',
+      cancelScheduleEdit
+    );
+
+    const saveButton =
+      document.createElement('button');
+
+    saveButton.className =
+      'primary-button';
+
+    saveButton.type = 'submit';
+
+    saveButton.textContent =
+      'Save changes';
+
+    actions.append(
+      cancelButton,
+      saveButton
+    );
+
+    form.append(
+      makeField(
+        'Start',
+        startInput
+      ),
+
+      makeField(
+        'Finish',
+        endInput
+      ),
+
+      activityField,
+      actions
+    );
+
+    [
+      startInput,
+      endInput,
+      activityInput
+    ].forEach((input) => {
+      input.addEventListener(
+        'input',
+        () => {
+          input.classList.remove(
+            'is-invalid'
+          );
+        }
+      );
+    });
+
+    form.addEventListener(
+      'keydown',
+      (event) => {
+        if (
+          event.key === 'Escape'
+        ) {
+          event.preventDefault();
+          cancelScheduleEdit();
+        }
+      }
+    );
+
+    form.addEventListener(
+      'submit',
+      (event) => {
+        event.preventDefault();
+
+        clearInvalidState(
+          startInput,
+          endInput,
+          activityInput
+        );
+
+        const values = {
+          date: item.date,
+          start: startInput.value,
+          end: endInput.value,
+          activity:
+            activityInput.value.trim()
+        };
+
+        const issue =
+          validateScheduleValues(values);
+
+        if (issue) {
+          const field =
+            issue.field === 'start'
+              ? startInput
+              : issue.field === 'end'
+                ? endInput
+                : activityInput;
+
+          field.classList.add(
+            'is-invalid'
+          );
+
+          field.focus();
+
+          showToast(
+            issue.message,
+            {
+              type: 'error',
+              title:
+                'Could not save changes'
+            }
+          );
+
+          return;
+        }
+
+        const savedItem =
+          state.schedule.find(
+            (entry) =>
+              entry.id === item.id
+          );
+
+        if (!savedItem) {
+          editingScheduleId = null;
+
+          renderSchedule();
+
+          showToast(
+            'That time block no longer exists.',
+            {
+              type: 'error'
+            }
+          );
+
+          return;
+        }
+
+        savedItem.start =
+          values.start;
+
+        savedItem.end =
+          values.end;
+
+        savedItem.activity =
+          values.activity.slice(
+            0,
+            160
+          );
+
+        editingScheduleId = null;
+
+        commit();
+
+        showToast(
+          'The time block was updated.',
+          {
+            type: 'success',
+            title: 'Plan updated'
+          }
+        );
+      }
+    );
+
+    row.append(form);
+
+    return row;
+  }
+
   function renderSchedule() {
     const selectedDate =
-      els.scheduleFilterDate
-        .value || todayKey();
+      els.scheduleFilterDate.value ||
+      todayKey();
 
     els.scheduleFilterDate.value =
       selectedDate;
 
     els.scheduleDayTitle.textContent =
-      formatDayTitle(
-        selectedDate
-      );
+      formatDayTitle(selectedDate);
 
     els.scheduleList.replaceChildren();
 
@@ -1767,6 +2516,8 @@
         );
 
     if (!items.length) {
+      editingScheduleId = null;
+
       els.scheduleList.append(
         makeEmptyState(
           'No time blocks planned for this day.'
@@ -1776,7 +2527,29 @@
       return;
     }
 
+    if (
+      editingScheduleId &&
+      !items.some(
+        (item) =>
+          item.id ===
+          editingScheduleId
+      )
+    ) {
+      editingScheduleId = null;
+    }
+
     items.forEach((item) => {
+      if (
+        item.id ===
+        editingScheduleId
+      ) {
+        els.scheduleList.append(
+          renderScheduleEditor(item)
+        );
+
+        return;
+      }
+
       const row =
         document.createElement(
           'div'
@@ -1787,11 +2560,31 @@
 
       const timeBlock =
         document.createElement(
-          'div'
+          'button'
         );
 
       timeBlock.className =
-        'time-block';
+        'time-block schedule-edit-target';
+
+      timeBlock.type = 'button';
+
+      timeBlock.setAttribute(
+        'aria-label',
+        `Edit the times for ${item.activity}`
+      );
+
+      timeBlock.title =
+        'Edit start and finish times';
+
+      timeBlock.addEventListener(
+        'click',
+        () => {
+          startScheduleEdit(
+            item.id,
+            'start'
+          );
+        }
+      );
 
       const start =
         document.createElement(
@@ -1799,9 +2592,7 @@
         );
 
       start.textContent =
-        formatTime(
-          item.start
-        );
+        formatTime(item.start);
 
       const end =
         document.createElement(
@@ -1809,22 +2600,41 @@
         );
 
       end.textContent =
-        `to ${formatTime(
-          item.end
-        )}`;
+        `to ${formatTime(item.end)}`;
 
       timeBlock.append(
         start,
         end
       );
 
-      const main =
+      const activityButton =
         document.createElement(
-          'div'
+          'button'
         );
 
-      main.className =
-        'item-main';
+      activityButton.className =
+        'schedule-activity-button schedule-edit-target';
+
+      activityButton.type =
+        'button';
+
+      activityButton.setAttribute(
+        'aria-label',
+        `Edit ${item.activity}`
+      );
+
+      activityButton.title =
+        'Edit this activity';
+
+      activityButton.addEventListener(
+        'click',
+        () => {
+          startScheduleEdit(
+            item.id,
+            'activity'
+          );
+        }
+      );
 
       const title =
         document.createElement(
@@ -1837,24 +2647,90 @@
       title.textContent =
         item.activity;
 
-      main.append(title);
+      const caption =
+        document.createElement(
+          'small'
+        );
 
-      row.append(
-        timeBlock,
-        main,
+      caption.className =
+        'schedule-edit-caption';
+
+      caption.textContent =
+        'Click to edit';
+
+      activityButton.append(
+        title,
+        caption
+      );
+
+      const actions =
+        document.createElement(
+          'div'
+        );
+
+      actions.className =
+        'schedule-item-actions';
+
+      actions.append(
+        makeEditButton(
+          `Edit “${item.activity}”`,
+          () => {
+            startScheduleEdit(
+              item.id,
+              'activity'
+            );
+          }
+        ),
+
         makeDeleteButton(
           `Delete “${item.activity}”`,
-          () => {
+          async () => {
+            const approved =
+              await showDialog({
+                title:
+                  'Delete this time block?',
+
+                message:
+                  `“${item.activity}” will be removed from ${formatDayTitle(item.date)}.`,
+
+                type: 'danger',
+                confirmText: 'Delete',
+                showCancel: true
+              });
+
+            if (!approved) {
+              return;
+            }
+
             state.schedule =
               state.schedule.filter(
                 (entry) =>
-                  entry.id !==
-                  item.id
+                  entry.id !== item.id
               );
 
+            if (
+              editingScheduleId ===
+              item.id
+            ) {
+              editingScheduleId = null;
+            }
+
             commit();
+
+            showToast(
+              'The time block was deleted.',
+              {
+                type: 'success'
+              }
+            );
           }
         )
+      );
+
+      row.append(
+        timeBlock,
+        activityButton,
+        actions
       );
 
       els.scheduleList.append(
@@ -1863,10 +2739,7 @@
     });
   }
 
-  function compareScheduleItems(
-    a,
-    b
-  ) {
+  function compareScheduleItems(a, b) {
     return (
       a.start.localeCompare(
         b.start
@@ -1880,18 +2753,283 @@
     );
   }
 
+  function setCopyScheduleMessage(
+    message = '',
+    type = ''
+  ) {
+    els.copyScheduleMessage.textContent =
+      message;
+
+    els.copyScheduleMessage.classList.toggle(
+      'success',
+      type === 'success'
+    );
+
+    els.copyScheduleMessage.classList.toggle(
+      'error',
+      type === 'error'
+    );
+  }
+
+  function scheduleSignature(item) {
+    return `${item.start}|${item.end}|${item.activity
+      .trim()
+      .toLocaleLowerCase()}`;
+  }
+
+  async function copyScheduleDay(
+    sourceDate,
+    targetDate,
+    replaceTarget = false
+  ) {
+    setCopyScheduleMessage();
+
+    if (
+      !validDate(sourceDate) ||
+      !validDate(targetDate)
+    ) {
+      const message =
+        'Choose a valid source date and target date.';
+
+      setCopyScheduleMessage(
+        message,
+        'error'
+      );
+
+      showToast(
+        message,
+        {
+          type: 'error',
+          title:
+            'Could not copy plan'
+        }
+      );
+
+      return;
+    }
+
+    if (sourceDate === targetDate) {
+      const message =
+        'Choose two different dates before copying.';
+
+      setCopyScheduleMessage(
+        message,
+        'error'
+      );
+
+      showToast(
+        message,
+        {
+          type: 'error',
+          title:
+            'Could not copy plan'
+        }
+      );
+
+      return;
+    }
+
+    const sourceItems =
+      state.schedule
+        .filter(
+          (item) =>
+            item.date ===
+            sourceDate
+        )
+        .sort(
+          compareScheduleItems
+        );
+
+    if (!sourceItems.length) {
+      const message =
+        `There are no time blocks on ${formatDayTitle(sourceDate)} to copy.`;
+
+      setCopyScheduleMessage(
+        message,
+        'error'
+      );
+
+      showToast(
+        message,
+        {
+          type: 'error',
+          title:
+            'Nothing to copy'
+        }
+      );
+
+      return;
+    }
+
+    const targetItems =
+      state.schedule.filter(
+        (item) =>
+          item.date === targetDate
+      );
+
+    if (
+      replaceTarget &&
+      targetItems.length
+    ) {
+      const approved =
+        await showDialog({
+          title:
+            'Replace the target day?',
+
+          message:
+            `All ${targetItems.length} existing time block${
+              targetItems.length === 1
+                ? ''
+                : 's'
+            } on ${formatDayTitle(targetDate)} will be removed first.`,
+
+          type: 'danger',
+          confirmText:
+            'Replace day',
+          showCancel: true
+        });
+
+      if (!approved) {
+        return;
+      }
+    }
+
+    if (replaceTarget) {
+      state.schedule =
+        state.schedule.filter(
+          (item) =>
+            item.date !==
+            targetDate
+        );
+    }
+
+    const existingSignatures =
+      new Set(
+        state.schedule
+          .filter(
+            (item) =>
+              item.date ===
+              targetDate
+          )
+          .map(
+            scheduleSignature
+          )
+      );
+
+    let copiedCount = 0;
+    let skippedCount = 0;
+
+    const createdAtBase =
+      Date.now();
+
+    sourceItems.forEach(
+      (item, index) => {
+        const signature =
+          scheduleSignature(item);
+
+        if (
+          !replaceTarget &&
+          existingSignatures.has(
+            signature
+          )
+        ) {
+          skippedCount += 1;
+          return;
+        }
+
+        state.schedule.push({
+          id: createId(),
+          date: targetDate,
+          start: item.start,
+          end: item.end,
+          activity: item.activity,
+
+          createdAt:
+            new Date(
+              createdAtBase + index
+            ).toISOString()
+        });
+
+        existingSignatures.add(
+          signature
+        );
+
+        copiedCount += 1;
+      }
+    );
+
+    els.scheduleFilterDate.value =
+      targetDate;
+
+    els.scheduleDate.value =
+      targetDate;
+
+    els.copyScheduleTargetDate.value =
+      targetDate;
+
+    commit();
+
+    if (!copiedCount) {
+      const message =
+        'Nothing was copied because every block already exists on the target day.';
+
+      setCopyScheduleMessage(
+        message,
+        'error'
+      );
+
+      showToast(
+        message,
+        {
+          type: 'error',
+          title:
+            'Nothing copied'
+        }
+      );
+
+      return;
+    }
+
+    const skippedText =
+      skippedCount
+        ? ` ${skippedCount} duplicate${
+            skippedCount === 1
+              ? ' was'
+              : 's were'
+          } skipped.`
+        : '';
+
+    const successMessage =
+      `Copied ${copiedCount} time block${
+        copiedCount === 1
+          ? ''
+          : 's'
+      } to ${formatDayTitle(targetDate)}.${skippedText}`;
+
+    setCopyScheduleMessage(
+      successMessage,
+      'success'
+    );
+
+    showToast(
+      successMessage,
+      {
+        type: 'success',
+        title: 'Plan copied'
+      }
+    );
+  }
+
   function renderMeals() {
     const selectedDate =
-      els.mealFilterDate
-        .value || todayKey();
+      els.mealFilterDate.value ||
+      todayKey();
 
     els.mealFilterDate.value =
       selectedDate;
 
     els.mealDayTitle.textContent =
-      formatDayTitle(
-        selectedDate
-      );
+      formatDayTitle(selectedDate);
 
     els.mealList.replaceChildren();
 
@@ -2015,37 +3153,21 @@
       macros.className =
         'macro-line';
 
-      const macroValues = [
-        `${formatNumber(
-          meal.calories
-        )} kcal`,
+      [
+        `${formatNumber(meal.calories)} kcal`,
+        `${formatNumber(meal.protein)}g protein`,
+        `${formatNumber(meal.carbs)}g carbs`,
+        `${formatNumber(meal.fat)}g fat`
+      ].forEach((text) => {
+        const span =
+          document.createElement(
+            'span'
+          );
 
-        `${formatNumber(
-          meal.protein
-        )}g protein`,
+        span.textContent = text;
 
-        `${formatNumber(
-          meal.carbs
-        )}g carbs`,
-
-        `${formatNumber(
-          meal.fat
-        )}g fat`
-      ];
-
-      macroValues.forEach(
-        (text) => {
-          const span =
-            document.createElement(
-              'span'
-            );
-
-          span.textContent =
-            text;
-
-          macros.append(span);
-        }
-      );
+        macros.append(span);
+      });
 
       main.append(
         title,
@@ -2055,6 +3177,7 @@
       row.append(
         type,
         main,
+
         makeDeleteButton(
           `Delete “${meal.food}”`,
           () => {
@@ -2192,8 +3315,7 @@
               entry.append(title);
 
               if (
-                workout.duration >
-                0
+                workout.duration > 0
               ) {
                 const duration =
                   document.createElement(
@@ -2201,9 +3323,7 @@
                   );
 
                 duration.textContent =
-                  `${formatNumber(
-                    workout.duration
-                  )} minutes`;
+                  `${formatNumber(workout.duration)} minutes`;
 
                 entry.append(
                   duration
@@ -2259,25 +3379,24 @@
   function exportData() {
     const payload = {
       app: 'DayFlow',
-
       exportedAt:
         new Date().toISOString(),
-
       data: state
     };
 
-    const blob = new Blob(
-      [
-        JSON.stringify(
-          payload,
-          null,
-          2
-        )
-      ],
-      {
-        type: 'application/json'
-      }
-    );
+    const blob =
+      new Blob(
+        [
+          JSON.stringify(
+            payload,
+            null,
+            2
+          )
+        ],
+        {
+          type: 'application/json'
+        }
+      );
 
     const url =
       URL.createObjectURL(blob);
@@ -2300,9 +3419,7 @@
     URL.revokeObjectURL(url);
   }
 
-  async function importData(
-    file
-  ) {
+  async function importData(file) {
     if (!file) {
       return;
     }
@@ -2316,8 +3433,7 @@
 
       const source =
         parsed?.data &&
-        typeof parsed.data ===
-          'object'
+        typeof parsed.data === 'object'
           ? parsed.data
           : parsed;
 
@@ -2331,13 +3447,24 @@
         imported.workouts.length;
 
       const approved =
-        window.confirm(
-          `Import ${itemCount} planner item${
-            itemCount === 1
-              ? ''
-              : 's'
-          }? This will replace the current DayFlow data.`
-        );
+        await showDialog({
+          title:
+            'Import this backup?',
+
+          message:
+            `Import ${itemCount} planner item${
+              itemCount === 1
+                ? ''
+                : 's'
+            }? Your current DayFlow data will be replaced.`,
+
+          type: 'danger',
+
+          confirmText:
+            'Import backup',
+
+          showCancel: true
+        });
 
       if (!approved) {
         return;
@@ -2354,8 +3481,13 @@
 
       renderAll();
 
-      window.alert(
-        'DayFlow data imported successfully.'
+      showToast(
+        'DayFlow data was imported successfully.',
+        {
+          type: 'success',
+          title:
+            'Import complete'
+        }
       );
     } catch (error) {
       console.error(
@@ -2363,25 +3495,42 @@
         error
       );
 
-      window.alert(
-        'That file could not be imported. Choose a valid DayFlow JSON backup.'
+      showToast(
+        'That file could not be imported. Choose a valid DayFlow JSON backup.',
+        {
+          type: 'error',
+          title:
+            'Import failed'
+        }
       );
     } finally {
       els.importInput.value = '';
     }
   }
 
-  function resetAllData() {
+  async function resetAllData() {
     const approved =
-      window.confirm(
-        'Reset all DayFlow data? This cannot be undone unless you exported a backup.'
-      );
+      await showDialog({
+        title:
+          'Reset all DayFlow data?',
+
+        message:
+          'Every task, time block, meal, and workout will be removed. This cannot be undone unless you exported a backup.',
+
+        type: 'danger',
+
+        confirmText:
+          'Reset everything',
+
+        showCancel: true
+      });
 
     if (!approved) {
       return;
     }
 
     state = defaultState();
+    editingScheduleId = null;
 
     localStorage.removeItem(
       STORAGE_KEY
@@ -2391,6 +3540,15 @@
     syncCustomSelects();
     setSaveStatus('saved');
     renderAll();
+
+    showToast(
+      'All DayFlow data was reset.',
+      {
+        type: 'success',
+        title:
+          'Reset complete'
+      }
+    );
   }
 
   function setDefaultDates() {
@@ -2401,6 +3559,17 @@
 
     els.scheduleFilterDate.value =
       today;
+
+    els.copyScheduleTargetDate.value =
+      today;
+
+    els.copyScheduleSourceDate.value =
+      shiftDateKey(today, -1);
+
+    els.copyScheduleReplace.checked =
+      false;
+
+    setCopyScheduleMessage();
 
     els.mealDate.value =
       today;
@@ -2417,10 +3586,11 @@
       (button) => {
         button.addEventListener(
           'click',
-          () =>
+          () => {
             navigate(
               button.dataset.section
-            )
+            );
+          }
         );
       }
     );
@@ -2429,10 +3599,11 @@
       (button) => {
         button.addEventListener(
           'click',
-          () =>
+          () => {
             navigate(
               button.dataset.goTo
-            )
+            );
+          }
         );
       }
     );
@@ -2511,24 +3682,40 @@
 
     els.clearCompletedButton.addEventListener(
       'click',
-      () => {
+      async () => {
         const completedCount =
           state.tasks.filter(
             (task) => task.done
           ).length;
 
         if (!completedCount) {
+          showToast(
+            'There are no completed tasks to clear.',
+            {
+              type: 'info'
+            }
+          );
+
           return;
         }
 
         const approved =
-          window.confirm(
-            `Clear ${completedCount} completed task${
-              completedCount === 1
-                ? ''
-                : 's'
-            }?`
-          );
+          await showDialog({
+            title:
+              'Clear completed tasks?',
+
+            message:
+              `${completedCount} completed task${
+                completedCount === 1
+                  ? ''
+                  : 's'
+              } will be deleted.`,
+
+            type: 'danger',
+            confirmText:
+              'Clear tasks',
+            showCancel: true
+          });
 
         if (!approved) {
           return;
@@ -2536,10 +3723,18 @@
 
         state.tasks =
           state.tasks.filter(
-            (task) => !task.done
+            (task) =>
+              !task.done
           );
 
         commit();
+
+        showToast(
+          'Completed tasks were cleared.',
+          {
+            type: 'success'
+          }
+        );
       }
     );
 
@@ -2551,45 +3746,92 @@
         els.scheduleMessage.textContent =
           '';
 
-        const start =
-          els.startTime.value;
+        clearInvalidState(
+          els.scheduleDate,
+          els.startTime,
+          els.endTime,
+          els.scheduleActivity
+        );
 
-        const end =
-          els.endTime.value;
+        const values = {
+          date:
+            els.scheduleDate.value,
 
-        if (start >= end) {
+          start:
+            els.startTime.value,
+
+          end:
+            els.endTime.value,
+
+          activity:
+            els.scheduleActivity.value.trim()
+        };
+
+        const issue =
+          validateScheduleValues(values);
+
+        if (issue) {
+          const fields = {
+            date:
+              els.scheduleDate,
+
+            start:
+              els.startTime,
+
+            end:
+              els.endTime,
+
+            activity:
+              els.scheduleActivity
+          };
+
+          const field =
+            fields[issue.field];
+
           els.scheduleMessage.textContent =
-            'The finish time must be later than the start time.';
+            issue.message;
 
-          els.endTime.focus();
+          field.classList.add(
+            'is-invalid'
+          );
+
+          field.focus();
+
+          showToast(
+            issue.message,
+            {
+              type: 'error',
+              title:
+                'Could not add time block'
+            }
+          );
 
           return;
         }
 
         state.schedule.push({
           id: createId(),
-
-          date:
-            els.scheduleDate.value,
-
-          start,
-
-          end,
+          date: values.date,
+          start: values.start,
+          end: values.end,
 
           activity:
-            els.scheduleActivity.value
-              .trim()
-              .slice(0, 160),
+            values.activity.slice(
+              0,
+              160
+            ),
 
           createdAt:
             new Date().toISOString()
         });
 
+        editingScheduleId = null;
+
         els.scheduleFilterDate.value =
-          els.scheduleDate.value;
+          values.date;
 
         const retainedDate =
-          els.scheduleDate.value;
+          values.date;
 
         els.scheduleForm.reset();
 
@@ -2601,13 +3843,123 @@
 
         commit();
 
+        showToast(
+          'The time block was added to your plan.',
+          {
+            type: 'success',
+            title:
+              'Time block added'
+          }
+        );
+
         els.startTime.focus();
       }
     );
 
+    [
+      els.scheduleDate,
+      els.startTime,
+      els.endTime,
+      els.scheduleActivity
+    ].forEach((field) => {
+      field.addEventListener(
+        'input',
+        () => {
+          field.classList.remove(
+            'is-invalid'
+          );
+
+          els.scheduleMessage.textContent =
+            '';
+        }
+      );
+    });
+
     els.scheduleFilterDate.addEventListener(
       'change',
-      renderSchedule
+      () => {
+        editingScheduleId = null;
+
+        renderSchedule();
+
+        els.copyScheduleTargetDate.value =
+          els.scheduleFilterDate.value;
+
+        els.copyScheduleSourceDate.value =
+          shiftDateKey(
+            els.scheduleFilterDate.value,
+            -1
+          );
+
+        setCopyScheduleMessage();
+      }
+    );
+
+    els.copyScheduleForm.addEventListener(
+      'submit',
+      async (event) => {
+        event.preventDefault();
+
+        await copyScheduleDay(
+          els.copyScheduleSourceDate.value,
+          els.copyScheduleTargetDate.value,
+          els.copyScheduleReplace.checked
+        );
+      }
+    );
+
+    els.copyYesterdayButton.addEventListener(
+      'click',
+      async () => {
+        const targetDate =
+          els.copyScheduleTargetDate.value ||
+          els.scheduleFilterDate.value ||
+          todayKey();
+
+        const yesterday =
+          shiftDateKey(
+            targetDate,
+            -1
+          );
+
+        els.copyScheduleTargetDate.value =
+          targetDate;
+
+        els.copyScheduleSourceDate.value =
+          yesterday;
+
+        await copyScheduleDay(
+          yesterday,
+          targetDate,
+          els.copyScheduleReplace.checked
+        );
+      }
+    );
+
+    els.copyScheduleTargetDate.addEventListener(
+      'change',
+      () => {
+        if (
+          !validDate(
+            els.copyScheduleSourceDate.value
+          )
+        ) {
+          els.copyScheduleSourceDate.value =
+            shiftDateKey(
+              els.copyScheduleTargetDate.value,
+              -1
+            );
+        }
+
+        setCopyScheduleMessage();
+      }
+    );
+
+    els.copyScheduleSourceDate.addEventListener(
+      'change',
+      () => {
+        setCopyScheduleMessage();
+      }
     );
 
     els.mealForm.addEventListener(
@@ -2620,7 +3972,6 @@
 
         state.meals.push({
           id: createId(),
-
           date,
 
           type:
@@ -2694,7 +4045,6 @@
 
         state.workouts.push({
           id: createId(),
-
           day,
 
           title:
@@ -2754,7 +4104,9 @@
 
     els.resetAllButton.addEventListener(
       'click',
-      resetAllData
+      () => {
+        void resetAllData();
+      }
     );
 
     window.addEventListener(
@@ -2795,11 +4147,9 @@
       today;
 
     setDefaultDates();
-
+    initializeFeedbackUi();
     initializeCustomSelects();
-
     bindEvents();
-
     renderAll();
 
     navigate(

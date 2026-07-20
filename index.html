@@ -205,7 +205,7 @@
         </div>
 
         <article class="panel">
-          <form id="scheduleForm" class="form-grid schedule-form">
+          <form id="scheduleForm" class="form-grid schedule-form" novalidate>
             <div class="field">
               <label for="scheduleDate">Date</label>
               <input id="scheduleDate" type="date" required>
@@ -227,12 +227,49 @@
           <p class="form-message" id="scheduleMessage" role="alert"></p>
         </article>
 
+        <article class="panel copy-plan-panel" aria-labelledby="copy-plan-heading">
+          <div class="copy-plan-heading">
+            <div>
+              <p class="eyebrow">Reuse a routine</p>
+              <h3 id="copy-plan-heading">Copy another day’s plan</h3>
+              <p>Bring all time blocks from yesterday or any chosen day into a new date.</p>
+            </div>
+            <span class="copy-plan-icon" aria-hidden="true">⧉</span>
+          </div>
+
+          <form id="copyScheduleForm" class="copy-plan-form" novalidate>
+            <div class="field">
+              <label for="copyScheduleSourceDate">Copy from</label>
+              <input id="copyScheduleSourceDate" type="date" required>
+            </div>
+            <div class="field">
+              <label for="copyScheduleTargetDate">Copy to</label>
+              <input id="copyScheduleTargetDate" type="date" required>
+            </div>
+
+            <label class="copy-replace-option" for="copyScheduleReplace">
+              <input id="copyScheduleReplace" type="checkbox">
+              <span>
+                <strong>Replace the target day</strong>
+                <small>Otherwise, copied blocks are added and exact duplicates are skipped.</small>
+              </span>
+            </label>
+
+            <div class="copy-plan-actions">
+              <button class="secondary-button" id="copyYesterdayButton" type="button">Copy yesterday</button>
+              <button class="primary-button" type="submit">Copy chosen day</button>
+            </div>
+          </form>
+          <p class="form-message copy-message" id="copyScheduleMessage" role="status" aria-live="polite"></p>
+        </article>
+
         <div class="schedule-layout">
           <article class="panel">
             <div class="panel-heading">
               <div>
                 <p class="eyebrow">Selected day</p>
                 <h3 id="scheduleDayTitle">Today</h3>
+                <p class="edit-plan-hint">Click a saved time or activity to edit it.</p>
               </div>
               <input class="date-filter" id="scheduleFilterDate" type="date" aria-label="Choose day to view">
             </div>
@@ -382,6 +419,23 @@
       <p>Add your first item using the form above.</p>
     </div>
   </template>
+
+
+  <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="false"></div>
+
+  <div class="app-dialog-backdrop" id="appDialog" hidden>
+    <section class="app-dialog" role="dialog" aria-modal="true" aria-labelledby="appDialogTitle" aria-describedby="appDialogMessage">
+      <div class="app-dialog-icon" id="appDialogIcon" aria-hidden="true">!</div>
+      <div class="app-dialog-copy">
+        <h2 id="appDialogTitle">Message</h2>
+        <p id="appDialogMessage"></p>
+      </div>
+      <div class="app-dialog-actions">
+        <button class="secondary-button" id="appDialogCancel" type="button">Cancel</button>
+        <button class="primary-button" id="appDialogConfirm" type="button">OK</button>
+      </div>
+    </section>
+  </div>
 
   <script src="app.js"></script>
 </body>
