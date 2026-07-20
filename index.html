@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="A private, local-first daily planner for tasks, time blocks, meals, macros, and workouts.">
+  <meta name="theme-color" content="#070910">
   <title>DayFlow — Daily Life Planner</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -48,7 +49,7 @@
     <main class="main-content">
       <header class="topbar">
         <div>
-          <p class="eyebrow" id="currentDate">Today</p>
+          <time class="eyebrow" id="currentDate" datetime="">Today</time>
           <h1 id="pageTitle">Overview</h1>
         </div>
 
@@ -58,10 +59,8 @@
             Saved
           </span>
           <button class="icon-button" id="exportButton" type="button" title="Export planner data" aria-label="Export planner data">⇩</button>
-          <label class="icon-button file-button" title="Import planner data" aria-label="Import planner data">
-            ⇧
-            <input id="importInput" type="file" accept="application/json">
-          </label>
+          <button class="icon-button" id="importButton" type="button" title="Import planner data" aria-label="Import planner data">⇧</button>
+          <input class="visually-hidden-file" id="importInput" type="file" accept="application/json">
         </div>
       </header>
 
@@ -75,7 +74,7 @@
           </div>
 
           <div class="progress-panel" aria-label="Checklist completion">
-            <div class="progress-ring" id="progressRing">
+            <div class="progress-ring" id="progressRing" role="progressbar" aria-label="Checklist completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
               <span id="progressPercent">0%</span>
             </div>
             <div>
@@ -131,7 +130,7 @@
               <input id="quickTaskInput" type="text" maxlength="140" placeholder="What do you need to remember?" required>
               <button class="primary-button compact" type="submit">Add</button>
             </form>
-            <div class="mini-list" id="overviewTaskList"></div>
+            <div class="mini-list" id="overviewTaskList" aria-live="polite"></div>
           </article>
 
           <article class="panel">
@@ -142,7 +141,7 @@
               </div>
               <button class="text-button" type="button" data-go-to="schedule">Edit plan</button>
             </div>
-            <div class="timeline-preview" id="overviewScheduleList"></div>
+            <div class="timeline-preview" id="overviewScheduleList" aria-live="polite"></div>
           </article>
         </div>
       </section>
@@ -192,7 +191,7 @@
             <button class="text-button danger-text" id="clearCompletedButton" type="button">Clear completed</button>
           </div>
 
-          <div class="item-list" id="taskList"></div>
+          <div class="item-list" id="taskList" aria-live="polite"></div>
         </article>
       </section>
 
@@ -237,7 +236,7 @@
               </div>
               <input class="date-filter" id="scheduleFilterDate" type="date" aria-label="Choose day to view">
             </div>
-            <div class="timeline-list" id="scheduleList"></div>
+            <div class="timeline-list" id="scheduleList" aria-live="polite"></div>
           </article>
 
           <aside class="panel tips-panel">
@@ -323,7 +322,7 @@
             </div>
             <input class="date-filter" id="mealFilterDate" type="date" aria-label="Choose meal-plan date">
           </div>
-          <div class="meal-list" id="mealList"></div>
+          <div class="meal-list" id="mealList" aria-live="polite"></div>
         </article>
       </section>
 
@@ -366,7 +365,7 @@
           </form>
         </article>
 
-        <div class="week-grid" id="workoutWeek"></div>
+        <div class="week-grid" id="workoutWeek" aria-live="polite"></div>
       </section>
 
       <footer class="app-footer">

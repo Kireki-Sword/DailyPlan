@@ -40,6 +40,9 @@
   let state = loadState();
   let activeTaskFilter = 'all';
   let saveTimer = null;
+  let openCustomSelect = null;
+
+  const customSelects = new Map();
 
   const $ = (selector, scope = document) => {
     return scope.querySelector(selector);
@@ -54,6 +57,7 @@
     pageTitle: $('#pageTitle'),
     saveStatus: $('#saveStatus'),
     exportButton: $('#exportButton'),
+    importButton: $('#importButton'),
     importInput: $('#importInput'),
 
     progressRing: $('#progressRing'),
@@ -114,43 +118,55 @@
 
   function loadState() {
     try {
-      const savedData = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEY);
 
-      if (!savedData) {
+      if (!raw) {
         return defaultState();
       }
 
-      return normalizeState(JSON.parse(savedData));
+      return normalizeState(JSON.parse(raw));
     } catch (error) {
-      console.warn('DayFlow could not load saved data:', error);
+      console.warn(
+        'DayFlow could not load saved data:',
+        error
+      );
+
       return defaultState();
     }
   }
 
   function normalizeState(value) {
-    const nextState = defaultState();
+    const next = defaultState();
 
     if (!value || typeof value !== 'object') {
-      return nextState;
+      return next;
     }
 
-    nextState.tasks = Array.isArray(value.tasks)
-      ? value.tasks.map(normalizeTask).filter(Boolean)
+    next.tasks = Array.isArray(value.tasks)
+      ? value.tasks
+          .map(normalizeTask)
+          .filter(Boolean)
       : [];
 
-    nextState.schedule = Array.isArray(value.schedule)
-      ? value.schedule.map(normalizeScheduleItem).filter(Boolean)
+    next.schedule = Array.isArray(value.schedule)
+      ? value.schedule
+          .map(normalizeScheduleItem)
+          .filter(Boolean)
       : [];
 
-    nextState.meals = Array.isArray(value.meals)
-      ? value.meals.map(normalizeMeal).filter(Boolean)
+    next.meals = Array.isArray(value.meals)
+      ? value.meals
+          .map(normalizeMeal)
+          .filter(Boolean)
       : [];
 
-    nextState.workouts = Array.isArray(value.workouts)
-      ? value.workouts.map(normalizeWorkout).filter(Boolean)
+    next.workouts = Array.isArray(value.workouts)
+      ? value.workouts
+          .map(normalizeWorkout)
+          .filter(Boolean)
       : [];
 
-    return nextState;
+    return next;
   }
 
   function normalizeTask(item) {
@@ -164,15 +180,26 @@
 
     return {
       id: safeId(item.id),
-      text: item.text.trim().slice(0, 140),
+
+      text: item.text
+        .trim()
+        .slice(0, 140),
+
       category:
         typeof item.category === 'string'
           ? item.category.slice(0, 40)
           : 'Personal',
-      priority: ['low', 'normal', 'high'].includes(item.priority)
+
+      priority: [
+        'low',
+        'normal',
+        'high'
+      ].includes(item.priority)
         ? item.priority
         : 'normal',
+
       done: Boolean(item.done),
+
       createdAt: validDateTime(item.createdAt)
         ? item.createdAt
         : new Date().toISOString()
@@ -184,7 +211,8 @@
       !item ||
       !validDate(item.date) ||
       !validTime(item.start) ||
-      !validTime(item.end)
+      !validTime(item.end) ||
+      item.start >= item.end
     ) {
       return null;
     }
@@ -198,10 +226,17 @@
 
     return {
       id: safeId(item.id),
+
       date: item.date,
+
       start: item.start,
+
       end: item.end,
-      activity: item.activity.trim().slice(0, 160),
+
+      activity: item.activity
+        .trim()
+        .slice(0, 160),
+
       createdAt: validDateTime(item.createdAt)
         ? item.createdAt
         : new Date().toISOString()
@@ -220,16 +255,42 @@
 
     return {
       id: safeId(item.id),
+
       date: item.date,
+
       type:
         typeof item.type === 'string'
           ? item.type.slice(0, 30)
           : 'Meal',
-      food: item.food.trim().slice(0, 160),
-      calories: clampNumber(item.calories, 0, 10000),
-      protein: clampNumber(item.protein, 0, 1000),
-      carbs: clampNumber(item.carbs, 0, 1000),
-      fat: clampNumber(item.fat, 0, 1000),
+
+      food: item.food
+        .trim()
+        .slice(0, 160),
+
+      calories: clampNumber(
+        item.calories,
+        0,
+        10000
+      ),
+
+      protein: clampNumber(
+        item.protein,
+        0,
+        1000
+      ),
+
+      carbs: clampNumber(
+        item.carbs,
+        0,
+        1000
+      ),
+
+      fat: clampNumber(
+        item.fat,
+        0,
+        1000
+      ),
+
       createdAt: validDateTime(item.createdAt)
         ? item.createdAt
         : new Date().toISOString()
@@ -253,13 +314,26 @@
 
     return {
       id: safeId(item.id),
+
       day: item.day,
-      title: item.title.trim().slice(0, 120),
-      duration: clampNumber(item.duration, 0, 600),
+
+      title: item.title
+        .trim()
+        .slice(0, 120),
+
+      duration: clampNumber(
+        item.duration,
+        0,
+        600
+      ),
+
       notes:
         typeof item.notes === 'string'
-          ? item.notes.trim().slice(0, 1000)
+          ? item.notes
+              .trim()
+              .slice(0, 1000)
           : '',
+
       createdAt: validDateTime(item.createdAt)
         ? item.createdAt
         : new Date().toISOString()
@@ -267,11 +341,9 @@
   }
 
   function safeId(value) {
-    if (typeof value === 'string' && value) {
-      return value;
-    }
-
-    return createId();
+    return typeof value === 'string' && value
+      ? value
+      : createId();
   }
 
   function createId() {
@@ -285,12 +357,27 @@
   }
 
   function validDate(value) {
+    if (
+      typeof value !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(value)
+    ) {
+      return false;
+    }
+
+    const [year, month, day] = value
+      .split('-')
+      .map(Number);
+
+    const date = new Date(
+      year,
+      month - 1,
+      day
+    );
+
     return (
-      typeof value === 'string' &&
-      /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-      !Number.isNaN(
-        new Date(`${value}T00:00:00`).getTime()
-      )
+      date.getFullYear() === year &&
+      date.getMonth() === month - 1 &&
+      date.getDate() === day
     );
   }
 
@@ -304,7 +391,9 @@
   function validDateTime(value) {
     return (
       typeof value === 'string' &&
-      !Number.isNaN(new Date(value).getTime())
+      !Number.isNaN(
+        new Date(value).getTime()
+      )
     );
   }
 
@@ -315,14 +404,20 @@
       return 0;
     }
 
-    return Math.min(max, Math.max(min, number));
+    return Math.min(
+      max,
+      Math.max(min, number)
+    );
   }
 
   function saveState() {
     setSaveStatus('saving');
+
     window.clearTimeout(saveTimer);
 
     saveTimer = window.setTimeout(() => {
+      saveTimer = null;
+
       try {
         localStorage.setItem(
           STORAGE_KEY,
@@ -351,11 +446,20 @@
       status === 'saving'
     );
 
+    els.saveStatus.classList.toggle(
+      'error',
+      status === 'error'
+    );
+
     els.saveStatus.textContent = '';
 
     const dot = document.createElement('span');
+
     dot.className = 'status-dot';
-    dot.setAttribute('aria-hidden', 'true');
+    dot.setAttribute(
+      'aria-hidden',
+      'true'
+    );
 
     const message =
       status === 'saving'
@@ -377,6 +481,7 @@
 
   function todayKey() {
     const date = new Date();
+
     const year = date.getFullYear();
 
     const month = String(
@@ -401,12 +506,15 @@
       return key;
     }
 
-    return new Intl.DateTimeFormat(undefined, {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric'
-    }).format(date);
+    return new Intl.DateTimeFormat(
+      undefined,
+      {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      }
+    ).format(date);
   }
 
   function formatDayTitle(key) {
@@ -420,11 +528,14 @@
       return key;
     }
 
-    return new Intl.DateTimeFormat(undefined, {
-      weekday: 'long',
-      month: 'short',
-      day: 'numeric'
-    }).format(date);
+    return new Intl.DateTimeFormat(
+      undefined,
+      {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric'
+      }
+    ).format(date);
   }
 
   function formatTime(value) {
@@ -437,32 +548,50 @@
       .map(Number);
 
     const date = new Date();
-    date.setHours(hours, minutes, 0, 0);
 
-    return new Intl.DateTimeFormat(undefined, {
-      hour: 'numeric',
-      minute: '2-digit'
-    }).format(date);
+    date.setHours(
+      hours,
+      minutes,
+      0,
+      0
+    );
+
+    return new Intl.DateTimeFormat(
+      undefined,
+      {
+        hour: 'numeric',
+        minute: '2-digit'
+      }
+    ).format(date);
   }
 
   function formatNumber(value) {
-    return new Intl.NumberFormat(undefined, {
-      maximumFractionDigits: 1
-    }).format(value || 0);
+    return new Intl.NumberFormat(
+      undefined,
+      {
+        maximumFractionDigits: 1
+      }
+    ).format(value || 0);
   }
 
   function currentWeekday() {
-    const index = (new Date().getDay() + 6) % 7;
+    const index =
+      (new Date().getDay() + 6) % 7;
+
     return WEEK_DAYS[index];
   }
 
   function makeEmptyState(
-    message = 'Add your first item using the form above.'
+    message =
+      'Add your first item using the form above.'
   ) {
     const fragment =
-      els.emptyStateTemplate.content.cloneNode(true);
+      els.emptyStateTemplate.content.cloneNode(
+        true
+      );
 
-    const paragraph = fragment.querySelector('p');
+    const paragraph =
+      fragment.querySelector('p');
 
     if (paragraph) {
       paragraph.textContent = message;
@@ -471,42 +600,80 @@
     return fragment;
   }
 
-  function makeDeleteButton(label, onClick) {
-    const button = document.createElement('button');
+  function makeDeleteButton(
+    label,
+    onClick
+  ) {
+    const button =
+      document.createElement('button');
 
     button.className = 'delete-button';
     button.type = 'button';
-    button.setAttribute('aria-label', label);
+
+    button.setAttribute(
+      'aria-label',
+      label
+    );
+
     button.title = label;
     button.textContent = '×';
-    button.addEventListener('click', onClick);
+
+    button.addEventListener(
+      'click',
+      onClick
+    );
 
     return button;
   }
 
-  function navigate(section, updateHash = true) {
-    const safeSection = SECTIONS.includes(section)
-      ? section
-      : 'overview';
+  function navigate(
+    section,
+    updateHash = true
+  ) {
+    const safeSection =
+      SECTIONS.includes(section)
+        ? section
+        : 'overview';
 
-    $$('.page-section').forEach((panel) => {
-      panel.classList.toggle(
-        'active',
-        panel.id === safeSection
-      );
-    });
+    $$('.page-section').forEach(
+      (panel) => {
+        const active =
+          panel.id === safeSection;
 
-    $$('.nav-button').forEach((button) => {
-      const active =
-        button.dataset.section === safeSection;
+        panel.classList.toggle(
+          'active',
+          active
+        );
 
-      button.classList.toggle('active', active);
+        panel.setAttribute(
+          'aria-hidden',
+          String(!active)
+        );
 
-      button.setAttribute(
-        'aria-current',
-        active ? 'page' : 'false'
-      );
-    });
+        panel.toggleAttribute(
+          'inert',
+          !active
+        );
+      }
+    );
+
+    $$('.nav-button').forEach(
+      (button) => {
+        const active =
+          button.dataset.section ===
+          safeSection;
+
+        button.classList.toggle(
+          'active',
+          active
+        );
+
+        button.setAttribute(
+          'aria-current',
+          active ? 'page' : 'false'
+        );
+      }
+    );
 
     els.pageTitle.textContent =
       SECTION_TITLES[safeSection];
@@ -531,6 +698,525 @@
     });
   }
 
+  function enhanceSelect(select) {
+    if (
+      !select ||
+      customSelects.has(select)
+    ) {
+      return;
+    }
+
+    const shell =
+      document.createElement('div');
+
+    shell.className = 'select-shell';
+
+    select.parentNode.insertBefore(
+      shell,
+      select
+    );
+
+    shell.append(select);
+
+    select.classList.add(
+      'native-select'
+    );
+
+    select.tabIndex = -1;
+
+    select.setAttribute(
+      'aria-hidden',
+      'true'
+    );
+
+    const trigger =
+      document.createElement('button');
+
+    trigger.className = 'select-trigger';
+    trigger.type = 'button';
+
+    trigger.setAttribute(
+      'aria-haspopup',
+      'listbox'
+    );
+
+    trigger.setAttribute(
+      'aria-expanded',
+      'false'
+    );
+
+    const label = select.labels?.[0];
+
+    trigger.setAttribute(
+      'aria-label',
+      label?.textContent.trim() ||
+        'Choose an option'
+    );
+
+    label?.addEventListener(
+      'click',
+      (event) => {
+        event.preventDefault();
+        trigger.focus();
+      }
+    );
+
+    const value =
+      document.createElement('span');
+
+    value.className = 'select-value';
+
+    const chevron =
+      document.createElement('span');
+
+    chevron.className =
+      'select-chevron';
+
+    chevron.setAttribute(
+      'aria-hidden',
+      'true'
+    );
+
+    trigger.append(
+      value,
+      chevron
+    );
+
+    const menu =
+      document.createElement('div');
+
+    menu.className = 'select-menu';
+
+    menu.id =
+      `${select.id || createId()}-menu`;
+
+    menu.setAttribute(
+      'role',
+      'listbox'
+    );
+
+    menu.setAttribute(
+      'aria-label',
+      label?.textContent.trim() ||
+        'Options'
+    );
+
+    menu.setAttribute(
+      'aria-hidden',
+      'true'
+    );
+
+    trigger.setAttribute(
+      'aria-controls',
+      menu.id
+    );
+
+    const optionButtons =
+      [...select.options].map(
+        (option, index) => {
+          const button =
+            document.createElement(
+              'button'
+            );
+
+          button.className =
+            'select-option';
+
+          button.type = 'button';
+
+          button.textContent =
+            option.textContent;
+
+          button.dataset.value =
+            option.value;
+
+          button.dataset.index =
+            String(index);
+
+          button.id =
+            `${menu.id}-option-${index}`;
+
+          button.setAttribute(
+            'role',
+            'option'
+          );
+
+          button.tabIndex = -1;
+
+          button.addEventListener(
+            'click',
+            () => {
+              select.value =
+                option.value;
+
+              select.dispatchEvent(
+                new Event('change', {
+                  bubbles: true
+                })
+              );
+
+              closeSelect(true);
+            }
+          );
+
+          button.addEventListener(
+            'keydown',
+            (event) => {
+              const currentIndex =
+                Number(
+                  button.dataset.index
+                );
+
+              if (
+                event.key ===
+                'ArrowDown'
+              ) {
+                event.preventDefault();
+
+                focusOption(
+                  Math.min(
+                    optionButtons.length -
+                      1,
+                    currentIndex + 1
+                  )
+                );
+              } else if (
+                event.key === 'ArrowUp'
+              ) {
+                event.preventDefault();
+
+                focusOption(
+                  Math.max(
+                    0,
+                    currentIndex - 1
+                  )
+                );
+              } else if (
+                event.key === 'Home'
+              ) {
+                event.preventDefault();
+                focusOption(0);
+              } else if (
+                event.key === 'End'
+              ) {
+                event.preventDefault();
+
+                focusOption(
+                  optionButtons.length - 1
+                );
+              } else if (
+                event.key === 'Escape'
+              ) {
+                event.preventDefault();
+                closeSelect(true);
+              } else if (
+                event.key === 'Tab'
+              ) {
+                closeSelect(false);
+              }
+            }
+          );
+
+          menu.append(button);
+
+          return button;
+        }
+      );
+
+    shell.append(
+      trigger,
+      menu
+    );
+
+    function selectedIndex() {
+      return Math.max(
+        0,
+        select.selectedIndex
+      );
+    }
+
+    function focusOption(index) {
+      const target =
+        optionButtons[index];
+
+      if (!target) {
+        return;
+      }
+
+      optionButtons.forEach(
+        (item) => {
+          item.classList.remove(
+            'focused'
+          );
+        }
+      );
+
+      target.classList.add(
+        'focused'
+      );
+
+      target.tabIndex = 0;
+
+      target.focus({
+        preventScroll: true
+      });
+
+      target.scrollIntoView({
+        block: 'nearest'
+      });
+    }
+
+    function sync() {
+      const selected =
+        select.options[
+          selectedIndex()
+        ];
+
+      value.textContent =
+        selected?.textContent ||
+        'Choose an option';
+
+      trigger.disabled =
+        select.disabled;
+
+      shell.classList.toggle(
+        'disabled',
+        select.disabled
+      );
+
+      optionButtons.forEach(
+        (button, index) => {
+          const isSelected =
+            index === selectedIndex();
+
+          button.classList.toggle(
+            'selected',
+            isSelected
+          );
+
+          button.setAttribute(
+            'aria-selected',
+            String(isSelected)
+          );
+        }
+      );
+    }
+
+    function openSelect(
+      preferredIndex =
+        selectedIndex()
+    ) {
+      if (select.disabled) {
+        return;
+      }
+
+      if (
+        openCustomSelect &&
+        openCustomSelect !== api
+      ) {
+        openCustomSelect.close(false);
+      }
+
+      shell.classList.add('open');
+
+      trigger.setAttribute(
+        'aria-expanded',
+        'true'
+      );
+
+      menu.setAttribute(
+        'aria-hidden',
+        'false'
+      );
+
+      openCustomSelect = api;
+
+      window.requestAnimationFrame(
+        () => {
+          focusOption(
+            preferredIndex
+          );
+        }
+      );
+    }
+
+    function closeSelect(
+      returnFocus = false
+    ) {
+      shell.classList.remove(
+        'open'
+      );
+
+      trigger.setAttribute(
+        'aria-expanded',
+        'false'
+      );
+
+      menu.setAttribute(
+        'aria-hidden',
+        'true'
+      );
+
+      optionButtons.forEach(
+        (button) => {
+          button.classList.remove(
+            'focused'
+          );
+
+          button.tabIndex = -1;
+        }
+      );
+
+      if (
+        openCustomSelect === api
+      ) {
+        openCustomSelect = null;
+      }
+
+      if (returnFocus) {
+        trigger.focus();
+      }
+    }
+
+    trigger.addEventListener(
+      'click',
+      () => {
+        if (
+          shell.classList.contains(
+            'open'
+          )
+        ) {
+          closeSelect(false);
+        } else {
+          openSelect();
+        }
+      }
+    );
+
+    trigger.addEventListener(
+      'keydown',
+      (event) => {
+        const openKeys = [
+          'ArrowDown',
+          'ArrowUp',
+          'Enter',
+          ' '
+        ];
+
+        if (
+          openKeys.includes(
+            event.key
+          )
+        ) {
+          event.preventDefault();
+
+          const offset =
+            event.key ===
+            'ArrowUp'
+              ? -1
+              : 0;
+
+          openSelect(
+            Math.max(
+              0,
+              Math.min(
+                optionButtons.length -
+                  1,
+                selectedIndex() +
+                  offset
+              )
+            )
+          );
+        }
+      }
+    );
+
+    select.addEventListener(
+      'change',
+      sync
+    );
+
+    select
+      .closest('form')
+      ?.addEventListener(
+        'reset',
+        () => {
+          window.requestAnimationFrame(
+            sync
+          );
+        }
+      );
+
+    const observer =
+      new MutationObserver(sync);
+
+    observer.observe(select, {
+      attributes: true,
+      attributeFilter: [
+        'disabled'
+      ]
+    });
+
+    const api = {
+      shell,
+      trigger,
+      menu,
+      sync,
+      close: closeSelect
+    };
+
+    customSelects.set(
+      select,
+      api
+    );
+
+    sync();
+  }
+
+  function initializeCustomSelects() {
+    $$('select').forEach(
+      enhanceSelect
+    );
+
+    document.addEventListener(
+      'pointerdown',
+      (event) => {
+        if (
+          openCustomSelect &&
+          !openCustomSelect.shell.contains(
+            event.target
+          )
+        ) {
+          openCustomSelect.close(
+            false
+          );
+        }
+      }
+    );
+
+    document.addEventListener(
+      'keydown',
+      (event) => {
+        if (
+          event.key === 'Escape' &&
+          openCustomSelect
+        ) {
+          openCustomSelect.close(
+            true
+          );
+        }
+      }
+    );
+  }
+
+  function syncCustomSelects() {
+    customSelects.forEach(
+      (component) => {
+        component.sync();
+      }
+    );
+  }
+
   function renderAll() {
     renderOverview();
     renderTasks();
@@ -542,16 +1228,22 @@
   function renderOverview() {
     const today = todayKey();
 
-    const totalTasks = state.tasks.length;
+    const totalTasks =
+      state.tasks.length;
 
-    const doneTasks = state.tasks.filter(
-      (task) => task.done
-    ).length;
+    const doneTasks =
+      state.tasks.filter(
+        (task) => task.done
+      ).length;
 
-    const openTasks = totalTasks - doneTasks;
+    const openTasks =
+      totalTasks - doneTasks;
 
     const progress = totalTasks
-      ? Math.round((doneTasks / totalTasks) * 100)
+      ? Math.round(
+          (doneTasks / totalTasks) *
+            100
+        )
       : 0;
 
     els.progressPercent.textContent =
@@ -562,51 +1254,85 @@
       `${progress * 3.6}deg`
     );
 
-    els.progressText.textContent = totalTasks
-      ? `${doneTasks} of ${totalTasks} task${
-          totalTasks === 1 ? '' : 's'
-        } complete`
-      : 'No tasks added yet';
+    els.progressRing.setAttribute(
+      'aria-valuenow',
+      String(progress)
+    );
+
+    els.progressRing.setAttribute(
+      'aria-valuetext',
+      `${progress}% complete`
+    );
+
+    els.progressText.textContent =
+      totalTasks
+        ? `${doneTasks} of ${totalTasks} task${
+            totalTasks === 1
+              ? ''
+              : 's'
+          } complete`
+        : 'No tasks added yet';
 
     els.openTaskCount.textContent =
       String(openTasks);
 
-    const todaysSchedule = state.schedule
-      .filter((item) => item.date === today)
-      .sort(compareScheduleItems);
+    const todaysSchedule =
+      state.schedule
+        .filter(
+          (item) =>
+            item.date === today
+        )
+        .sort(
+          compareScheduleItems
+        );
 
     els.scheduleCount.textContent =
-      String(todaysSchedule.length);
+      String(
+        todaysSchedule.length
+      );
 
-    const todaysMeals = state.meals.filter(
-      (item) => item.date === today
-    );
+    const todaysMeals =
+      state.meals.filter(
+        (item) =>
+          item.date === today
+      );
 
-    const todaysCalories = todaysMeals.reduce(
-      (sum, meal) => sum + meal.calories,
-      0
-    );
+    const todaysCalories =
+      todaysMeals.reduce(
+        (sum, meal) =>
+          sum + meal.calories,
+        0
+      );
 
     els.calorieCount.textContent =
-      formatNumber(todaysCalories);
+      formatNumber(
+        todaysCalories
+      );
 
-    const plannedDays = new Set(
-      state.workouts.map((workout) => workout.day)
-    );
+    const plannedDays =
+      new Set(
+        state.workouts.map(
+          (workout) =>
+            workout.day
+        )
+      );
 
     els.workoutDayCount.textContent =
       String(plannedDays.size);
 
     els.overviewTaskList.replaceChildren();
 
-    const previewTasks = [...state.tasks]
-      .sort((a, b) => {
-        return (
-          Number(a.done) - Number(b.done) ||
-          b.createdAt.localeCompare(a.createdAt)
-        );
-      })
-      .slice(0, 5);
+    const previewTasks =
+      [...state.tasks]
+        .sort(
+          (a, b) =>
+            Number(a.done) -
+              Number(b.done) ||
+            b.createdAt.localeCompare(
+              a.createdAt
+            )
+        )
+        .slice(0, 5);
 
     if (!previewTasks.length) {
       els.overviewTaskList.append(
@@ -615,84 +1341,140 @@
         )
       );
     } else {
-      previewTasks.forEach((task) => {
-        const row = document.createElement('div');
+      previewTasks.forEach(
+        (task) => {
+          const row =
+            document.createElement(
+              'div'
+            );
 
-        row.className =
-          `mini-item${task.done ? ' done' : ''}`;
+          row.className =
+            `mini-item${
+              task.done
+                ? ' done'
+                : ''
+            }`;
 
-        const checkbox =
-          document.createElement('input');
+          const checkbox =
+            document.createElement(
+              'input'
+            );
 
-        checkbox.type = 'checkbox';
-        checkbox.className = 'mini-check';
-        checkbox.checked = task.done;
+          checkbox.type =
+            'checkbox';
 
-        checkbox.setAttribute(
-          'aria-label',
-          `Mark “${task.text}” ${
-            task.done ? 'open' : 'done'
-          }`
-        );
+          checkbox.className =
+            'mini-check';
 
-        checkbox.addEventListener(
-          'change',
-          () => toggleTask(task.id)
-        );
+          checkbox.checked =
+            task.done;
 
-        const label =
-          document.createElement('label');
+          checkbox.setAttribute(
+            'aria-label',
+            `Mark “${task.text}” ${
+              task.done
+                ? 'open'
+                : 'done'
+            }`
+          );
 
-        label.textContent = task.text;
+          checkbox.addEventListener(
+            'change',
+            () =>
+              toggleTask(
+                task.id
+              )
+          );
 
-        row.append(checkbox, label);
-        els.overviewTaskList.append(row);
-      });
+          const label =
+            document.createElement(
+              'label'
+            );
+
+          label.textContent =
+            task.text;
+
+          row.append(
+            checkbox,
+            label
+          );
+
+          els.overviewTaskList.append(
+            row
+          );
+        }
+      );
     }
 
     els.overviewScheduleList.replaceChildren();
 
-    const upcoming = todaysSchedule
-      .filter(
-        (item) => item.end >= currentTimeKey()
-      )
-      .slice(0, 5);
+    const upcoming =
+      todaysSchedule
+        .filter(
+          (item) =>
+            item.end >=
+            currentTimeKey()
+        )
+        .slice(0, 5);
 
-    const schedulePreview = upcoming.length
-      ? upcoming
-      : todaysSchedule.slice(0, 5);
+    const schedulePreview =
+      upcoming.length
+        ? upcoming
+        : todaysSchedule.slice(
+            0,
+            5
+          );
 
-    if (!schedulePreview.length) {
+    if (
+      !schedulePreview.length
+    ) {
       els.overviewScheduleList.append(
         makeEmptyState(
           'No time blocks planned for today.'
         )
       );
     } else {
-      schedulePreview.forEach((item) => {
-        const row =
-          document.createElement('div');
+      schedulePreview.forEach(
+        (item) => {
+          const row =
+            document.createElement(
+              'div'
+            );
 
-        row.className =
-          'timeline-preview-item';
+          row.className =
+            'timeline-preview-item';
 
-        const time =
-          document.createElement('time');
+          const time =
+            document.createElement(
+              'time'
+            );
 
-        time.dateTime =
-          `${item.date}T${item.start}`;
+          time.dateTime =
+            `${item.date}T${item.start}`;
 
-        time.textContent =
-          formatTime(item.start);
+          time.textContent =
+            formatTime(
+              item.start
+            );
 
-        const activity =
-          document.createElement('p');
+          const activity =
+            document.createElement(
+              'p'
+            );
 
-        activity.textContent = item.activity;
+          activity.textContent =
+            item.activity;
 
-        row.append(time, activity);
-        els.overviewScheduleList.append(row);
-      });
+          row.append(
+            time,
+            activity
+          );
+
+          els.overviewScheduleList.append(
+            row
+          );
+        }
+      );
     }
   }
 
@@ -713,26 +1495,40 @@
   function renderTasks() {
     els.taskList.replaceChildren();
 
-    const tasks = [...state.tasks]
+    const tasks = [
+      ...state.tasks
+    ]
       .filter((task) => {
-        if (activeTaskFilter === 'open') {
+        if (
+          activeTaskFilter ===
+          'open'
+        ) {
           return !task.done;
         }
 
-        if (activeTaskFilter === 'done') {
+        if (
+          activeTaskFilter ===
+          'done'
+        ) {
           return task.done;
         }
 
         return true;
       })
-      .sort((a, b) => {
-        return (
-          Number(a.done) - Number(b.done) ||
-          priorityRank(b.priority) -
-            priorityRank(a.priority) ||
-          b.createdAt.localeCompare(a.createdAt)
-        );
-      });
+      .sort(
+        (a, b) =>
+          Number(a.done) -
+            Number(b.done) ||
+          priorityRank(
+            b.priority
+          ) -
+            priorityRank(
+              a.priority
+            ) ||
+          b.createdAt.localeCompare(
+            a.createdAt
+          )
+      );
 
     if (!tasks.length) {
       const message =
@@ -749,70 +1545,116 @@
 
     tasks.forEach((task) => {
       const row =
-        document.createElement('div');
+        document.createElement(
+          'div'
+        );
 
       row.className =
-        `task-item${task.done ? ' done' : ''}`;
+        `task-item${
+          task.done
+            ? ' done'
+            : ''
+        }`;
 
       const checkbox =
-        document.createElement('input');
+        document.createElement(
+          'input'
+        );
 
-      checkbox.type = 'checkbox';
-      checkbox.className = 'task-checkbox';
-      checkbox.checked = task.done;
+      checkbox.type =
+        'checkbox';
+
+      checkbox.className =
+        'task-checkbox';
+
+      checkbox.checked =
+        task.done;
 
       checkbox.setAttribute(
         'aria-label',
         `Mark “${task.text}” ${
-          task.done ? 'open' : 'done'
+          task.done
+            ? 'open'
+            : 'done'
         }`
       );
 
       checkbox.addEventListener(
         'change',
-        () => toggleTask(task.id)
+        () =>
+          toggleTask(task.id)
       );
 
       const main =
-        document.createElement('div');
+        document.createElement(
+          'div'
+        );
 
-      main.className = 'item-main';
+      main.className =
+        'item-main';
 
       const title =
-        document.createElement('strong');
+        document.createElement(
+          'strong'
+        );
 
-      title.className = 'item-title';
-      title.textContent = task.text;
+      title.className =
+        'item-title';
+
+      title.textContent =
+        task.text;
 
       const meta =
-        document.createElement('div');
+        document.createElement(
+          'div'
+        );
 
-      meta.className = 'item-meta';
+      meta.className =
+        'item-meta';
 
       const category =
-        document.createElement('span');
+        document.createElement(
+          'span'
+        );
 
-      category.className = 'badge';
-      category.textContent = task.category;
+      category.className =
+        'badge';
+
+      category.textContent =
+        task.category;
 
       const priority =
-        document.createElement('span');
+        document.createElement(
+          'span'
+        );
 
       priority.className =
         `badge priority-${task.priority}`;
 
       priority.textContent =
-        `${capitalize(task.priority)} priority`;
+        `${capitalize(
+          task.priority
+        )} priority`;
 
-      meta.append(category, priority);
-      main.append(title, meta);
+      meta.append(
+        category,
+        priority
+      );
+
+      main.append(
+        title,
+        meta
+      );
 
       row.append(
         checkbox,
         main,
         makeDeleteButton(
           `Delete “${task.text}”`,
-          () => deleteTask(task.id)
+          () =>
+            deleteTask(
+              task.id
+            )
         )
       );
 
@@ -820,7 +1662,9 @@
     });
   }
 
-  function priorityRank(priority) {
+  function priorityRank(
+    priority
+  ) {
     return {
       low: 0,
       normal: 1,
@@ -830,7 +1674,9 @@
 
   function capitalize(value) {
     return (
-      value.charAt(0).toUpperCase() +
+      value
+        .charAt(0)
+        .toUpperCase() +
       value.slice(1)
     );
   }
@@ -840,7 +1686,8 @@
     category = 'Personal',
     priority = 'normal'
   ) {
-    const cleanText = text.trim();
+    const cleanText =
+      text.trim();
 
     if (!cleanText) {
       return;
@@ -848,55 +1695,76 @@
 
     state.tasks.unshift({
       id: createId(),
-      text: cleanText.slice(0, 140),
+
+      text: cleanText.slice(
+        0,
+        140
+      ),
+
       category,
+
       priority,
+
       done: false,
-      createdAt: new Date().toISOString()
+
+      createdAt:
+        new Date().toISOString()
     });
 
     commit();
   }
 
   function toggleTask(id) {
-    const task = state.tasks.find(
-      (item) => item.id === id
-    );
+    const task =
+      state.tasks.find(
+        (item) =>
+          item.id === id
+      );
 
     if (!task) {
       return;
     }
 
     task.done = !task.done;
+
     commit();
   }
 
   function deleteTask(id) {
-    state.tasks = state.tasks.filter(
-      (task) => task.id !== id
-    );
+    state.tasks =
+      state.tasks.filter(
+        (task) =>
+          task.id !== id
+      );
 
     commit();
   }
 
   function renderSchedule() {
     const selectedDate =
-      els.scheduleFilterDate.value ||
-      todayKey();
+      els.scheduleFilterDate
+        .value || todayKey();
 
     els.scheduleFilterDate.value =
       selectedDate;
 
     els.scheduleDayTitle.textContent =
-      formatDayTitle(selectedDate);
+      formatDayTitle(
+        selectedDate
+      );
 
     els.scheduleList.replaceChildren();
 
-    const items = state.schedule
-      .filter(
-        (item) => item.date === selectedDate
-      )
-      .sort(compareScheduleItems);
+    const items =
+      state.schedule
+        .filter(
+          (item) =>
+            item.date ===
+            selectedDate
+        )
+        .sort(
+          compareScheduleItems
+        );
 
     if (!items.length) {
       els.scheduleList.append(
@@ -910,39 +1778,64 @@
 
     items.forEach((item) => {
       const row =
-        document.createElement('div');
+        document.createElement(
+          'div'
+        );
 
-      row.className = 'schedule-item';
+      row.className =
+        'schedule-item';
 
       const timeBlock =
-        document.createElement('div');
+        document.createElement(
+          'div'
+        );
 
-      timeBlock.className = 'time-block';
+      timeBlock.className =
+        'time-block';
 
       const start =
-        document.createElement('strong');
+        document.createElement(
+          'strong'
+        );
 
       start.textContent =
-        formatTime(item.start);
+        formatTime(
+          item.start
+        );
 
       const end =
-        document.createElement('small');
+        document.createElement(
+          'small'
+        );
 
       end.textContent =
-        `to ${formatTime(item.end)}`;
+        `to ${formatTime(
+          item.end
+        )}`;
 
-      timeBlock.append(start, end);
+      timeBlock.append(
+        start,
+        end
+      );
 
       const main =
-        document.createElement('div');
+        document.createElement(
+          'div'
+        );
 
-      main.className = 'item-main';
+      main.className =
+        'item-main';
 
       const title =
-        document.createElement('strong');
+        document.createElement(
+          'strong'
+        );
 
-      title.className = 'item-title';
-      title.textContent = item.activity;
+      title.className =
+        'item-title';
+
+      title.textContent =
+        item.activity;
 
       main.append(title);
 
@@ -954,7 +1847,9 @@
           () => {
             state.schedule =
               state.schedule.filter(
-                (entry) => entry.id !== item.id
+                (entry) =>
+                  entry.id !==
+                  item.id
               );
 
             commit();
@@ -962,77 +1857,106 @@
         )
       );
 
-      els.scheduleList.append(row);
+      els.scheduleList.append(
+        row
+      );
     });
   }
 
-  function compareScheduleItems(a, b) {
+  function compareScheduleItems(
+    a,
+    b
+  ) {
     return (
-      a.start.localeCompare(b.start) ||
-      a.end.localeCompare(b.end) ||
-      a.createdAt.localeCompare(b.createdAt)
+      a.start.localeCompare(
+        b.start
+      ) ||
+      a.end.localeCompare(
+        b.end
+      ) ||
+      a.createdAt.localeCompare(
+        b.createdAt
+      )
     );
   }
 
   function renderMeals() {
     const selectedDate =
-      els.mealFilterDate.value ||
-      todayKey();
+      els.mealFilterDate
+        .value || todayKey();
 
     els.mealFilterDate.value =
       selectedDate;
 
     els.mealDayTitle.textContent =
-      formatDayTitle(selectedDate);
+      formatDayTitle(
+        selectedDate
+      );
 
     els.mealList.replaceChildren();
 
-    const meals = state.meals
-      .filter(
-        (item) => item.date === selectedDate
-      )
-      .sort((a, b) => {
-        return (
-          mealRank(a.type) -
-            mealRank(b.type) ||
-          a.createdAt.localeCompare(
-            b.createdAt
-          )
+    const meals =
+      state.meals
+        .filter(
+          (item) =>
+            item.date ===
+            selectedDate
+        )
+        .sort(
+          (a, b) =>
+            mealRank(a.type) -
+              mealRank(b.type) ||
+            a.createdAt.localeCompare(
+              b.createdAt
+            )
         );
-      });
 
-    const totals = meals.reduce(
-      (sum, meal) => {
-        return {
+    const totals =
+      meals.reduce(
+        (sum, meal) => ({
           calories:
-            sum.calories + meal.calories,
+            sum.calories +
+            meal.calories,
+
           protein:
-            sum.protein + meal.protein,
+            sum.protein +
+            meal.protein,
+
           carbs:
-            sum.carbs + meal.carbs,
+            sum.carbs +
+            meal.carbs,
+
           fat:
-            sum.fat + meal.fat
-        };
-      },
-      {
-        calories: 0,
-        protein: 0,
-        carbs: 0,
-        fat: 0
-      }
-    );
+            sum.fat +
+            meal.fat
+        }),
+        {
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fat: 0
+        }
+      );
 
     els.totalCalories.textContent =
-      formatNumber(totals.calories);
+      formatNumber(
+        totals.calories
+      );
 
     els.totalProtein.textContent =
-      formatNumber(totals.protein);
+      formatNumber(
+        totals.protein
+      );
 
     els.totalCarbs.textContent =
-      formatNumber(totals.carbs);
+      formatNumber(
+        totals.carbs
+      );
 
     els.totalFat.textContent =
-      formatNumber(totals.fat);
+      formatNumber(
+        totals.fat
+      );
 
     if (!meals.length) {
       els.mealList.append(
@@ -1046,48 +1970,87 @@
 
     meals.forEach((meal) => {
       const row =
-        document.createElement('div');
+        document.createElement(
+          'div'
+        );
 
-      row.className = 'meal-item';
+      row.className =
+        'meal-item';
 
       const type =
-        document.createElement('div');
+        document.createElement(
+          'div'
+        );
 
-      type.className = 'meal-type';
-      type.textContent = meal.type;
+      type.className =
+        'meal-type';
+
+      type.textContent =
+        meal.type;
 
       const main =
-        document.createElement('div');
+        document.createElement(
+          'div'
+        );
 
-      main.className = 'item-main';
+      main.className =
+        'item-main';
 
       const title =
-        document.createElement('strong');
+        document.createElement(
+          'strong'
+        );
 
-      title.className = 'item-title';
-      title.textContent = meal.food;
+      title.className =
+        'item-title';
+
+      title.textContent =
+        meal.food;
 
       const macros =
-        document.createElement('div');
+        document.createElement(
+          'div'
+        );
 
-      macros.className = 'macro-line';
+      macros.className =
+        'macro-line';
 
       const macroValues = [
-        `${formatNumber(meal.calories)} kcal`,
-        `${formatNumber(meal.protein)}g protein`,
-        `${formatNumber(meal.carbs)}g carbs`,
-        `${formatNumber(meal.fat)}g fat`
+        `${formatNumber(
+          meal.calories
+        )} kcal`,
+
+        `${formatNumber(
+          meal.protein
+        )}g protein`,
+
+        `${formatNumber(
+          meal.carbs
+        )}g carbs`,
+
+        `${formatNumber(
+          meal.fat
+        )}g fat`
       ];
 
-      macroValues.forEach((text) => {
-        const span =
-          document.createElement('span');
+      macroValues.forEach(
+        (text) => {
+          const span =
+            document.createElement(
+              'span'
+            );
 
-        span.textContent = text;
-        macros.append(span);
-      });
+          span.textContent =
+            text;
 
-      main.append(title, macros);
+          macros.append(span);
+        }
+      );
+
+      main.append(
+        title,
+        macros
+      );
 
       row.append(
         type,
@@ -1097,7 +2060,9 @@
           () => {
             state.meals =
               state.meals.filter(
-                (entry) => entry.id !== meal.id
+                (entry) =>
+                  entry.id !==
+                  meal.id
               );
 
             commit();
@@ -1105,7 +2070,9 @@
         )
       );
 
-      els.mealList.append(row);
+      els.mealList.append(
+        row
+      );
     });
   }
 
@@ -1121,158 +2088,236 @@
   function renderWorkouts() {
     els.workoutWeek.replaceChildren();
 
-    const today = currentWeekday();
+    const today =
+      currentWeekday();
 
-    WEEK_DAYS.forEach((day) => {
-      const card =
-        document.createElement('article');
-
-      card.className =
-        `day-card${day === today ? ' today' : ''}`;
-
-      const header =
-        document.createElement('div');
-
-      header.className = 'day-card-header';
-
-      const heading =
-        document.createElement('h3');
-
-      heading.textContent = day;
-      header.append(heading);
-
-      if (day === today) {
-        const label =
-          document.createElement('span');
-
-        label.className = 'today-label';
-        label.textContent = 'Today';
-
-        header.append(label);
-      }
-
-      card.append(header);
-
-      const workouts = state.workouts
-        .filter(
-          (item) => item.day === day
-        )
-        .sort((a, b) => {
-          return a.createdAt.localeCompare(
-            b.createdAt
+    WEEK_DAYS.forEach(
+      (day) => {
+        const card =
+          document.createElement(
+            'article'
           );
-        });
 
-      if (!workouts.length) {
-        const empty =
-          document.createElement('div');
+        card.className =
+          `day-card${
+            day === today
+              ? ' today'
+              : ''
+          }`;
 
-        empty.className = 'day-empty';
+        const header =
+          document.createElement(
+            'div'
+          );
 
-        empty.textContent =
-          'Rest day or add a workout above.';
+        header.className =
+          'day-card-header';
 
-        card.append(empty);
-      } else {
-        workouts.forEach((workout) => {
-          const entry =
-            document.createElement('div');
+        const heading =
+          document.createElement(
+            'h3'
+          );
 
-          entry.className = 'workout-entry';
+        heading.textContent =
+          day;
 
-          const title =
-            document.createElement('strong');
+        header.append(
+          heading
+        );
 
-          title.textContent = workout.title;
-          entry.append(title);
+        if (day === today) {
+          const label =
+            document.createElement(
+              'span'
+            );
 
-          if (workout.duration > 0) {
-            const duration =
-              document.createElement('small');
+          label.className =
+            'today-label';
 
-            duration.textContent =
-              `${formatNumber(
-                workout.duration
-              )} minutes`;
+          label.textContent =
+            'Today';
 
-            entry.append(duration);
-          }
+          header.append(
+            label
+          );
+        }
 
-          if (workout.notes) {
-            const notes =
-              document.createElement('p');
+        card.append(header);
 
-            notes.textContent =
-              workout.notes;
+        const workouts =
+          state.workouts
+            .filter(
+              (item) =>
+                item.day === day
+            )
+            .sort(
+              (a, b) =>
+                a.createdAt.localeCompare(
+                  b.createdAt
+                )
+            );
 
-            entry.append(notes);
-          }
+        if (!workouts.length) {
+          const empty =
+            document.createElement(
+              'div'
+            );
 
-          entry.append(
-            makeDeleteButton(
-              `Delete “${workout.title}”`,
-              () => {
-                state.workouts =
-                  state.workouts.filter(
-                    (item) =>
-                      item.id !== workout.id
+          empty.className =
+            'day-empty';
+
+          empty.textContent =
+            'Rest day or add a workout above.';
+
+          card.append(empty);
+        } else {
+          workouts.forEach(
+            (workout) => {
+              const entry =
+                document.createElement(
+                  'div'
+                );
+
+              entry.className =
+                'workout-entry';
+
+              const title =
+                document.createElement(
+                  'strong'
+                );
+
+              title.textContent =
+                workout.title;
+
+              entry.append(title);
+
+              if (
+                workout.duration >
+                0
+              ) {
+                const duration =
+                  document.createElement(
+                    'small'
                   );
 
-                commit();
+                duration.textContent =
+                  `${formatNumber(
+                    workout.duration
+                  )} minutes`;
+
+                entry.append(
+                  duration
+                );
               }
-            )
+
+              if (
+                workout.notes
+              ) {
+                const notes =
+                  document.createElement(
+                    'p'
+                  );
+
+                notes.textContent =
+                  workout.notes;
+
+                entry.append(
+                  notes
+                );
+              }
+
+              entry.append(
+                makeDeleteButton(
+                  `Delete “${workout.title}”`,
+                  () => {
+                    state.workouts =
+                      state.workouts.filter(
+                        (item) =>
+                          item.id !==
+                          workout.id
+                      );
+
+                    commit();
+                  }
+                )
+              );
+
+              card.append(
+                entry
+              );
+            }
           );
+        }
 
-          card.append(entry);
-        });
+        els.workoutWeek.append(
+          card
+        );
       }
-
-      els.workoutWeek.append(card);
-    });
+    );
   }
 
   function exportData() {
     const payload = {
       app: 'DayFlow',
-      exportedAt: new Date().toISOString(),
+
+      exportedAt:
+        new Date().toISOString(),
+
       data: state
     };
 
     const blob = new Blob(
-      [JSON.stringify(payload, null, 2)],
+      [
+        JSON.stringify(
+          payload,
+          null,
+          2
+        )
+      ],
       {
         type: 'application/json'
       }
     );
 
-    const url = URL.createObjectURL(blob);
+    const url =
+      URL.createObjectURL(blob);
 
     const anchor =
       document.createElement('a');
 
     anchor.href = url;
+
     anchor.download =
       `dayflow-backup-${todayKey()}.json`;
 
-    document.body.append(anchor);
+    document.body.append(
+      anchor
+    );
+
     anchor.click();
     anchor.remove();
 
     URL.revokeObjectURL(url);
   }
 
-  async function importData(file) {
+  async function importData(
+    file
+  ) {
     if (!file) {
       return;
     }
 
     try {
-      const text = await file.text();
-      const parsed = JSON.parse(text);
+      const text =
+        await file.text();
+
+      const parsed =
+        JSON.parse(text);
 
       const source =
         parsed?.data &&
-        typeof parsed.data === 'object'
+        typeof parsed.data ===
+          'object'
           ? parsed.data
           : parsed;
 
@@ -1285,11 +2330,14 @@
         imported.meals.length +
         imported.workouts.length;
 
-      const approved = window.confirm(
-        `Import ${itemCount} planner item${
-          itemCount === 1 ? '' : 's'
-        }? This will replace the current DayFlow data.`
-      );
+      const approved =
+        window.confirm(
+          `Import ${itemCount} planner item${
+            itemCount === 1
+              ? ''
+              : 's'
+          }? This will replace the current DayFlow data.`
+        );
 
       if (!approved) {
         return;
@@ -1303,6 +2351,7 @@
       );
 
       setSaveStatus('saved');
+
       renderAll();
 
       window.alert(
@@ -1323,9 +2372,10 @@
   }
 
   function resetAllData() {
-    const approved = window.confirm(
-      'Reset all DayFlow data? This cannot be undone unless you exported a backup.'
-    );
+    const approved =
+      window.confirm(
+        'Reset all DayFlow data? This cannot be undone unless you exported a backup.'
+      );
 
     if (!approved) {
       return;
@@ -1333,9 +2383,12 @@
 
     state = defaultState();
 
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(
+      STORAGE_KEY
+    );
 
     setDefaultDates();
+    syncCustomSelects();
     setSaveStatus('saved');
     renderAll();
   }
@@ -1343,28 +2396,46 @@
   function setDefaultDates() {
     const today = todayKey();
 
-    els.scheduleDate.value = today;
-    els.scheduleFilterDate.value = today;
+    els.scheduleDate.value =
+      today;
 
-    els.mealDate.value = today;
-    els.mealFilterDate.value = today;
+    els.scheduleFilterDate.value =
+      today;
+
+    els.mealDate.value =
+      today;
+
+    els.mealFilterDate.value =
+      today;
 
     els.workoutDay.value =
       currentWeekday();
   }
 
   function bindEvents() {
-    $$('.nav-button').forEach((button) => {
-      button.addEventListener('click', () => {
-        navigate(button.dataset.section);
-      });
-    });
+    $$('.nav-button').forEach(
+      (button) => {
+        button.addEventListener(
+          'click',
+          () =>
+            navigate(
+              button.dataset.section
+            )
+        );
+      }
+    );
 
-    $$('[data-go-to]').forEach((button) => {
-      button.addEventListener('click', () => {
-        navigate(button.dataset.goTo);
-      });
-    });
+    $$('[data-go-to]').forEach(
+      (button) => {
+        button.addEventListener(
+          'click',
+          () =>
+            navigate(
+              button.dataset.goTo
+            )
+        );
+      }
+    );
 
     window.addEventListener(
       'hashchange',
@@ -1388,6 +2459,7 @@
         );
 
         els.quickTaskForm.reset();
+
         els.quickTaskInput.focus();
       }
     );
@@ -1404,7 +2476,12 @@
         );
 
         els.taskForm.reset();
-        els.taskPriority.value = 'normal';
+
+        els.taskPriority.value =
+          'normal';
+
+        syncCustomSelects();
+
         els.taskInput.focus();
       }
     );
@@ -1444,21 +2521,23 @@
           return;
         }
 
-        const approved = window.confirm(
-          `Clear ${completedCount} completed task${
-            completedCount === 1
-              ? ''
-              : 's'
-          }?`
-        );
+        const approved =
+          window.confirm(
+            `Clear ${completedCount} completed task${
+              completedCount === 1
+                ? ''
+                : 's'
+            }?`
+          );
 
         if (!approved) {
           return;
         }
 
-        state.tasks = state.tasks.filter(
-          (task) => !task.done
-        );
+        state.tasks =
+          state.tasks.filter(
+            (task) => !task.done
+          );
 
         commit();
       }
@@ -1469,28 +2548,39 @@
       (event) => {
         event.preventDefault();
 
-        els.scheduleMessage.textContent = '';
+        els.scheduleMessage.textContent =
+          '';
 
-        const start = els.startTime.value;
-        const end = els.endTime.value;
+        const start =
+          els.startTime.value;
+
+        const end =
+          els.endTime.value;
 
         if (start >= end) {
           els.scheduleMessage.textContent =
             'The finish time must be later than the start time.';
 
           els.endTime.focus();
+
           return;
         }
 
         state.schedule.push({
           id: createId(),
-          date: els.scheduleDate.value,
+
+          date:
+            els.scheduleDate.value,
+
           start,
+
           end,
+
           activity:
             els.scheduleActivity.value
               .trim()
               .slice(0, 160),
+
           createdAt:
             new Date().toISOString()
         });
@@ -1506,9 +2596,11 @@
         els.scheduleDate.value =
           retainedDate;
 
-        els.scheduleMessage.textContent = '';
+        els.scheduleMessage.textContent =
+          '';
 
         commit();
+
         els.startTime.focus();
       }
     );
@@ -1523,46 +2615,66 @@
       (event) => {
         event.preventDefault();
 
-        const date = els.mealDate.value;
+        const date =
+          els.mealDate.value;
 
         state.meals.push({
           id: createId(),
+
           date,
-          type: els.mealType.value,
+
+          type:
+            els.mealType.value,
+
           food:
             els.foodName.value
               .trim()
               .slice(0, 160),
-          calories: clampNumber(
-            els.calories.value,
-            0,
-            10000
-          ),
-          protein: clampNumber(
-            els.protein.value,
-            0,
-            1000
-          ),
-          carbs: clampNumber(
-            els.carbs.value,
-            0,
-            1000
-          ),
-          fat: clampNumber(
-            els.fat.value,
-            0,
-            1000
-          ),
+
+          calories:
+            clampNumber(
+              els.calories.value,
+              0,
+              10000
+            ),
+
+          protein:
+            clampNumber(
+              els.protein.value,
+              0,
+              1000
+            ),
+
+          carbs:
+            clampNumber(
+              els.carbs.value,
+              0,
+              1000
+            ),
+
+          fat:
+            clampNumber(
+              els.fat.value,
+              0,
+              1000
+            ),
+
           createdAt:
             new Date().toISOString()
         });
 
-        els.mealFilterDate.value = date;
+        els.mealFilterDate.value =
+          date;
 
         els.mealForm.reset();
-        els.mealDate.value = date;
+
+        els.mealDate.value =
+          date;
+
+        syncCustomSelects();
 
         commit();
+
         els.foodName.focus();
       }
     );
@@ -1582,28 +2694,39 @@
 
         state.workouts.push({
           id: createId(),
+
           day,
+
           title:
             els.workoutTitle.value
               .trim()
               .slice(0, 120),
-          duration: clampNumber(
-            els.workoutDuration.value,
-            0,
-            600
-          ),
+
+          duration:
+            clampNumber(
+              els.workoutDuration.value,
+              0,
+              600
+            ),
+
           notes:
             els.workoutNotes.value
               .trim()
               .slice(0, 1000),
+
           createdAt:
             new Date().toISOString()
         });
 
         els.workoutForm.reset();
-        els.workoutDay.value = day;
+
+        els.workoutDay.value =
+          day;
+
+        syncCustomSelects();
 
         commit();
+
         els.workoutTitle.focus();
       }
     );
@@ -1611,6 +2734,13 @@
     els.exportButton.addEventListener(
       'click',
       exportData
+    );
+
+    els.importButton.addEventListener(
+      'click',
+      () => {
+        els.importInput.click();
+      }
     );
 
     els.importInput.addEventListener(
@@ -1626,14 +2756,50 @@
       'click',
       resetAllData
     );
+
+    window.addEventListener(
+      'pagehide',
+      () => {
+        if (!saveTimer) {
+          return;
+        }
+
+        window.clearTimeout(
+          saveTimer
+        );
+
+        saveTimer = null;
+
+        try {
+          localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify(state)
+          );
+        } catch (error) {
+          console.error(
+            'DayFlow could not finish saving data:',
+            error
+          );
+        }
+      }
+    );
   }
 
   function initialize() {
+    const today = todayKey();
+
     els.currentDate.textContent =
-      formatLongDate(todayKey());
+      formatLongDate(today);
+
+    els.currentDate.dateTime =
+      today;
 
     setDefaultDates();
+
+    initializeCustomSelects();
+
     bindEvents();
+
     renderAll();
 
     navigate(
