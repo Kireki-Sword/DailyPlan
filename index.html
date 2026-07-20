@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="A private, local-first daily planner for tasks, time blocks, meals, macros, and workouts.">
+  <title>DayFlow — Daily Life Planner</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <a class="brand" href="#overview" aria-label="DayFlow home">
+        <span class="brand-mark" aria-hidden="true">D</span>
+        <span>
+          <strong>DayFlow</strong>
+          <small>Plan your life</small>
+        </span>
+      </a>
+
+      <nav class="nav-list">
+        <button class="nav-button active" data-section="overview" type="button">
+          <span aria-hidden="true">⌂</span> Overview
+        </button>
+        <button class="nav-button" data-section="checklist" type="button">
+          <span aria-hidden="true">✓</span> Checklist
+        </button>
+        <button class="nav-button" data-section="schedule" type="button">
+          <span aria-hidden="true">◷</span> Daily plan
+        </button>
+        <button class="nav-button" data-section="diet" type="button">
+          <span aria-hidden="true">◇</span> Diet & macros
+        </button>
+        <button class="nav-button" data-section="workout" type="button">
+          <span aria-hidden="true">↗</span> Workout week
+        </button>
+      </nav>
+
+      <div class="privacy-card">
+        <span class="privacy-dot" aria-hidden="true"></span>
+        <div>
+          <strong>Saved locally</strong>
+          <small>Your planner stays in this browser.</small>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="currentDate">Today</p>
+          <h1 id="pageTitle">Overview</h1>
+        </div>
+
+        <div class="topbar-actions">
+          <span class="save-status" id="saveStatus" role="status" aria-live="polite">
+            <span class="status-dot" aria-hidden="true"></span>
+            Saved
+          </span>
+          <button class="icon-button" id="exportButton" type="button" title="Export planner data" aria-label="Export planner data">⇩</button>
+          <label class="icon-button file-button" title="Import planner data" aria-label="Import planner data">
+            ⇧
+            <input id="importInput" type="file" accept="application/json">
+          </label>
+        </div>
+      </header>
+
+      <section class="page-section active" id="overview" aria-labelledby="overview-heading">
+        <div class="hero-card">
+          <div class="hero-copy">
+            <p class="eyebrow">Your personal command center</p>
+            <h2 id="overview-heading">Keep today clear and manageable.</h2>
+            <p>Capture anything you need to remember, block your time, plan meals, and organize your workout week in one private dashboard.</p>
+            <button class="primary-button" type="button" data-go-to="schedule">Plan today <span aria-hidden="true">→</span></button>
+          </div>
+
+          <div class="progress-panel" aria-label="Checklist completion">
+            <div class="progress-ring" id="progressRing">
+              <span id="progressPercent">0%</span>
+            </div>
+            <div>
+              <strong>Checklist progress</strong>
+              <small id="progressText">No tasks added yet</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="stats-grid" aria-label="Planner summary">
+          <article class="stat-card">
+            <span class="stat-icon purple" aria-hidden="true">✓</span>
+            <div>
+              <small>Open tasks</small>
+              <strong id="openTaskCount">0</strong>
+            </div>
+          </article>
+          <article class="stat-card">
+            <span class="stat-icon blue" aria-hidden="true">◷</span>
+            <div>
+              <small>Time blocks</small>
+              <strong id="scheduleCount">0</strong>
+            </div>
+          </article>
+          <article class="stat-card">
+            <span class="stat-icon cyan" aria-hidden="true">◇</span>
+            <div>
+              <small>Planned calories</small>
+              <strong id="calorieCount">0</strong>
+            </div>
+          </article>
+          <article class="stat-card">
+            <span class="stat-icon violet" aria-hidden="true">↗</span>
+            <div>
+              <small>Workout days</small>
+              <strong id="workoutDayCount">0</strong>
+            </div>
+          </article>
+        </div>
+
+        <div class="overview-grid">
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Quick capture</p>
+                <h3>Add a reminder</h3>
+              </div>
+              <button class="text-button" type="button" data-go-to="checklist">View all</button>
+            </div>
+
+            <form id="quickTaskForm" class="quick-form">
+              <label class="sr-only" for="quickTaskInput">New reminder</label>
+              <input id="quickTaskInput" type="text" maxlength="140" placeholder="What do you need to remember?" required>
+              <button class="primary-button compact" type="submit">Add</button>
+            </form>
+            <div class="mini-list" id="overviewTaskList"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Up next</p>
+                <h3>Today’s timeline</h3>
+              </div>
+              <button class="text-button" type="button" data-go-to="schedule">Edit plan</button>
+            </div>
+            <div class="timeline-preview" id="overviewScheduleList"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="page-section" id="checklist" aria-labelledby="checklist-heading">
+        <div class="section-intro">
+          <div>
+            <p class="eyebrow">Anything, anytime</p>
+            <h2 id="checklist-heading">Remember-to-do checklist</h2>
+            <p>Keep small tasks here when they do not need a specific time.</p>
+          </div>
+        </div>
+
+        <article class="panel">
+          <form id="taskForm" class="form-grid task-form">
+            <div class="field field-wide">
+              <label for="taskInput">Task</label>
+              <input id="taskInput" type="text" maxlength="140" placeholder="Example: Return library book" required>
+            </div>
+            <div class="field">
+              <label for="taskCategory">Category</label>
+              <select id="taskCategory">
+                <option>Personal</option>
+                <option>School</option>
+                <option>Work</option>
+                <option>Health</option>
+                <option>Errand</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="taskPriority">Priority</label>
+              <select id="taskPriority">
+                <option value="normal">Normal</option>
+                <option value="high">High</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <button class="primary-button form-submit" type="submit">Add task</button>
+          </form>
+
+          <div class="list-toolbar">
+            <div class="filter-buttons" role="group" aria-label="Filter checklist">
+              <button class="filter-button active" type="button" data-filter="all">All</button>
+              <button class="filter-button" type="button" data-filter="open">Open</button>
+              <button class="filter-button" type="button" data-filter="done">Done</button>
+            </div>
+            <button class="text-button danger-text" id="clearCompletedButton" type="button">Clear completed</button>
+          </div>
+
+          <div class="item-list" id="taskList"></div>
+        </article>
+      </section>
+
+      <section class="page-section" id="schedule" aria-labelledby="schedule-heading">
+        <div class="section-intro">
+          <div>
+            <p class="eyebrow">Time blocking</p>
+            <h2 id="schedule-heading">Daily plan</h2>
+            <p>Give important activities a clear start and finish time.</p>
+          </div>
+        </div>
+
+        <article class="panel">
+          <form id="scheduleForm" class="form-grid schedule-form">
+            <div class="field">
+              <label for="scheduleDate">Date</label>
+              <input id="scheduleDate" type="date" required>
+            </div>
+            <div class="field">
+              <label for="startTime">Start</label>
+              <input id="startTime" type="time" required>
+            </div>
+            <div class="field">
+              <label for="endTime">End</label>
+              <input id="endTime" type="time" required>
+            </div>
+            <div class="field field-wide">
+              <label for="scheduleActivity">Activity</label>
+              <input id="scheduleActivity" type="text" maxlength="160" placeholder="Example: Study biology chapter 4" required>
+            </div>
+            <button class="primary-button form-submit" type="submit">Add time block</button>
+          </form>
+          <p class="form-message" id="scheduleMessage" role="alert"></p>
+        </article>
+
+        <div class="schedule-layout">
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Selected day</p>
+                <h3 id="scheduleDayTitle">Today</h3>
+              </div>
+              <input class="date-filter" id="scheduleFilterDate" type="date" aria-label="Choose day to view">
+            </div>
+            <div class="timeline-list" id="scheduleList"></div>
+          </article>
+
+          <aside class="panel tips-panel">
+            <p class="eyebrow">Simple planning rule</p>
+            <h3>Leave breathing room.</h3>
+            <p>Do not schedule every minute. Add short gaps between larger blocks so delays do not ruin the rest of your day.</p>
+            <div class="tip">
+              <span aria-hidden="true">1</span>
+              <p>Choose your most important block first.</p>
+            </div>
+            <div class="tip">
+              <span aria-hidden="true">2</span>
+              <p>Use realistic start and finish times.</p>
+            </div>
+            <div class="tip">
+              <span aria-hidden="true">3</span>
+              <p>Keep flexible tasks in the checklist.</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="page-section" id="diet" aria-labelledby="diet-heading">
+        <div class="section-intro">
+          <div>
+            <p class="eyebrow">Food planning</p>
+            <h2 id="diet-heading">Diet & macros</h2>
+            <p>Write your planned meals and enter calories, protein, carbs, and fat manually.</p>
+          </div>
+        </div>
+
+        <article class="panel">
+          <form id="mealForm" class="form-grid meal-form">
+            <div class="field">
+              <label for="mealDate">Date</label>
+              <input id="mealDate" type="date" required>
+            </div>
+            <div class="field">
+              <label for="mealType">Meal</label>
+              <select id="mealType">
+                <option>Breakfast</option>
+                <option>Lunch</option>
+                <option>Dinner</option>
+                <option>Snack</option>
+              </select>
+            </div>
+            <div class="field field-wide">
+              <label for="foodName">Food or meal</label>
+              <input id="foodName" type="text" maxlength="160" placeholder="Example: Oats, yogurt, and berries" required>
+            </div>
+            <div class="field">
+              <label for="calories">Calories</label>
+              <input id="calories" type="number" min="0" max="10000" step="1" inputmode="numeric" placeholder="0">
+            </div>
+            <div class="field">
+              <label for="protein">Protein (g)</label>
+              <input id="protein" type="number" min="0" max="1000" step="0.1" inputmode="decimal" placeholder="0">
+            </div>
+            <div class="field">
+              <label for="carbs">Carbs (g)</label>
+              <input id="carbs" type="number" min="0" max="1000" step="0.1" inputmode="decimal" placeholder="0">
+            </div>
+            <div class="field">
+              <label for="fat">Fat (g)</label>
+              <input id="fat" type="number" min="0" max="1000" step="0.1" inputmode="decimal" placeholder="0">
+            </div>
+            <button class="primary-button form-submit" type="submit">Add meal</button>
+          </form>
+        </article>
+
+        <div class="macro-grid" aria-label="Macro totals for selected date">
+          <article class="macro-card"><small>Calories</small><strong id="totalCalories">0</strong><span>kcal</span></article>
+          <article class="macro-card"><small>Protein</small><strong id="totalProtein">0</strong><span>grams</span></article>
+          <article class="macro-card"><small>Carbs</small><strong id="totalCarbs">0</strong><span>grams</span></article>
+          <article class="macro-card"><small>Fat</small><strong id="totalFat">0</strong><span>grams</span></article>
+        </div>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Meal plan</p>
+              <h3 id="mealDayTitle">Today</h3>
+            </div>
+            <input class="date-filter" id="mealFilterDate" type="date" aria-label="Choose meal-plan date">
+          </div>
+          <div class="meal-list" id="mealList"></div>
+        </article>
+      </section>
+
+      <section class="page-section" id="workout" aria-labelledby="workout-heading">
+        <div class="section-intro">
+          <div>
+            <p class="eyebrow">Weekly training</p>
+            <h2 id="workout-heading">Workout week plan</h2>
+            <p>Plan the focus, duration, and exercise notes for each day.</p>
+          </div>
+        </div>
+
+        <article class="panel">
+          <form id="workoutForm" class="form-grid workout-form">
+            <div class="field">
+              <label for="workoutDay">Day</label>
+              <select id="workoutDay">
+                <option>Monday</option>
+                <option>Tuesday</option>
+                <option>Wednesday</option>
+                <option>Thursday</option>
+                <option>Friday</option>
+                <option>Saturday</option>
+                <option>Sunday</option>
+              </select>
+            </div>
+            <div class="field field-wide">
+              <label for="workoutTitle">Workout focus</label>
+              <input id="workoutTitle" type="text" maxlength="120" placeholder="Example: Upper body strength" required>
+            </div>
+            <div class="field">
+              <label for="workoutDuration">Duration (minutes)</label>
+              <input id="workoutDuration" type="number" min="0" max="600" step="5" inputmode="numeric" placeholder="45">
+            </div>
+            <div class="field field-full">
+              <label for="workoutNotes">Exercises or notes</label>
+              <textarea id="workoutNotes" rows="4" maxlength="1000" placeholder="Example: Push-ups 3×10&#10;Rows 3×12&#10;Stretch for 5 minutes"></textarea>
+            </div>
+            <button class="primary-button form-submit" type="submit">Add workout</button>
+          </form>
+        </article>
+
+        <div class="week-grid" id="workoutWeek"></div>
+      </section>
+
+      <footer class="app-footer">
+        <span>DayFlow stores information only in your current browser.</span>
+        <button class="text-button danger-text" id="resetAllButton" type="button">Reset all data</button>
+      </footer>
+    </main>
+  </div>
+
+  <template id="emptyStateTemplate">
+    <div class="empty-state">
+      <span aria-hidden="true">＋</span>
+      <strong>Nothing here yet</strong>
+      <p>Add your first item using the form above.</p>
+    </div>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
