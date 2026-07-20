@@ -196,15 +196,23 @@
       </section>
 
       <section class="page-section" id="schedule" aria-labelledby="schedule-heading">
-        <div class="section-intro">
+        <div class="section-intro schedule-intro">
           <div>
             <p class="eyebrow">Time blocking</p>
-            <h2 id="schedule-heading">Daily plan</h2>
-            <p>Give important activities a clear start and finish time.</p>
+            <h2 id="schedule-heading">Plan your time</h2>
+            <p>Add the important parts of your day, then adjust them whenever plans change.</p>
           </div>
         </div>
 
-        <article class="panel">
+        <article class="panel schedule-create-panel" aria-labelledby="add-time-block-heading">
+          <div class="schedule-create-heading">
+            <div>
+              <p class="eyebrow">New block</p>
+              <h3 id="add-time-block-heading">Add to your day</h3>
+            </div>
+            <p>Choose a date, time, and activity.</p>
+          </div>
+
           <form id="scheduleForm" class="form-grid schedule-form" novalidate>
             <div class="field">
               <label for="scheduleDate">Date</label>
@@ -215,74 +223,47 @@
               <input id="startTime" type="time" required>
             </div>
             <div class="field">
-              <label for="endTime">End</label>
+              <label for="endTime">Finish</label>
               <input id="endTime" type="time" required>
             </div>
             <div class="field field-wide">
               <label for="scheduleActivity">Activity</label>
-              <input id="scheduleActivity" type="text" maxlength="160" placeholder="Example: Study biology chapter 4" required>
+              <input id="scheduleActivity" type="text" maxlength="160" placeholder="What are you planning?" required>
             </div>
-            <button class="primary-button form-submit" type="submit">Add time block</button>
+            <button class="primary-button form-submit" type="submit">
+              <span aria-hidden="true">＋</span>
+              Add time block
+            </button>
           </form>
           <p class="form-message" id="scheduleMessage" role="alert"></p>
         </article>
 
-        <article class="panel copy-plan-panel" aria-labelledby="copy-plan-heading">
-          <div class="copy-plan-heading">
-            <div>
-              <p class="eyebrow">Reuse a routine</p>
-              <h3 id="copy-plan-heading">Copy another day’s plan</h3>
-              <p>Bring all time blocks from yesterday or any chosen day into a new date.</p>
-            </div>
-            <span class="copy-plan-icon" aria-hidden="true">⧉</span>
-          </div>
-
-          <form id="copyScheduleForm" class="copy-plan-form" novalidate>
-            <div class="field">
-              <label for="copyScheduleSourceDate">Copy from</label>
-              <input id="copyScheduleSourceDate" type="date" required>
-            </div>
-            <div class="field">
-              <label for="copyScheduleTargetDate">Copy to</label>
-              <input id="copyScheduleTargetDate" type="date" required>
-            </div>
-
-            <label class="copy-replace-option" for="copyScheduleReplace">
-              <input id="copyScheduleReplace" type="checkbox">
-              <span>
-                <strong>Replace the target day</strong>
-                <small>Otherwise, copied blocks are added and exact duplicates are skipped.</small>
-              </span>
-            </label>
-
-            <div class="copy-plan-actions">
-              <button class="secondary-button" id="copyYesterdayButton" type="button">Copy yesterday</button>
-              <button class="primary-button" type="submit">Copy chosen day</button>
-            </div>
-          </form>
-          <p class="form-message copy-message" id="copyScheduleMessage" role="status" aria-live="polite"></p>
-        </article>
-
         <div class="schedule-layout">
-          <article class="panel">
-            <div class="panel-heading">
+          <article class="panel schedule-day-panel">
+            <div class="schedule-day-header">
               <div>
-                <p class="eyebrow">Selected day</p>
+                <p class="eyebrow">Your schedule</p>
                 <h3 id="scheduleDayTitle">Today</h3>
-                <p class="edit-plan-hint">Click a saved time or activity to edit it.</p>
+                <p class="edit-plan-hint">Select a time or activity to edit it.</p>
               </div>
-              <input class="date-filter" id="scheduleFilterDate" type="date" aria-label="Choose day to view">
+
+              <div class="schedule-date-controls" aria-label="Change selected day">
+                <button class="date-step-button" id="schedulePreviousDay" type="button" aria-label="View previous day" title="Previous day">←</button>
+                <button class="today-button" id="scheduleTodayButton" type="button">Today</button>
+                <input class="date-filter" id="scheduleFilterDate" type="date" aria-label="Choose day to view">
+                <button class="date-step-button" id="scheduleNextDay" type="button" aria-label="View next day" title="Next day">→</button>
+              </div>
             </div>
             <div class="timeline-list" id="scheduleList" aria-live="polite"></div>
           </article>
 
           <aside class="panel tips-panel">
-            <p class="eyebrow">Simple planning rule</p>
+            <p class="eyebrow">Planning tip</p>
             <h3>Leave breathing room.</h3>
-            <p>Do not schedule every minute. Add short gaps between larger blocks so delays do not ruin the rest of your day.</p>
+            <p>Short gaps between larger blocks keep one delay from disrupting your whole day.</p>
             <div class="tip">
               <span aria-hidden="true">1</span>
-              <p>Choose your most important block first.</p>
+              <p>Plan your most important block first.</p>
             </div>
             <div class="tip">
               <span aria-hidden="true">2</span>
@@ -294,6 +275,44 @@
             </div>
           </aside>
         </div>
+
+        <details class="panel copy-plan-panel">
+          <summary class="copy-plan-summary">
+            <span class="copy-plan-icon" aria-hidden="true">⧉</span>
+            <span class="copy-plan-summary-copy">
+              <strong id="copy-plan-heading">Copy a previous day</strong>
+              <small>Reuse yesterday or another saved schedule.</small>
+            </span>
+            <span class="copy-plan-chevron" aria-hidden="true">⌄</span>
+          </summary>
+
+          <div class="copy-plan-content" aria-labelledby="copy-plan-heading">
+            <form id="copyScheduleForm" class="copy-plan-form" novalidate>
+              <div class="field">
+                <label for="copyScheduleSourceDate">Copy from</label>
+                <input id="copyScheduleSourceDate" type="date" required>
+              </div>
+              <div class="field">
+                <label for="copyScheduleTargetDate">Copy to</label>
+                <input id="copyScheduleTargetDate" type="date" required>
+              </div>
+
+              <label class="copy-replace-option" for="copyScheduleReplace">
+                <input id="copyScheduleReplace" type="checkbox">
+                <span>
+                  <strong>Replace target day</strong>
+                  <small>Leave off to add blocks and skip exact duplicates.</small>
+                </span>
+              </label>
+
+              <div class="copy-plan-actions">
+                <button class="secondary-button" id="copyYesterdayButton" type="button">Use yesterday</button>
+                <button class="primary-button" type="submit">Copy schedule</button>
+              </div>
+            </form>
+            <p class="form-message copy-message" id="copyScheduleMessage" role="status" aria-live="polite"></p>
+          </div>
+        </details>
       </section>
 
       <section class="page-section" id="diet" aria-labelledby="diet-heading">
